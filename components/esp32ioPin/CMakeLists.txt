@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/esp32ioPin.cpp" INCLUDE_DIRS "include" REQUIRES ioPin)

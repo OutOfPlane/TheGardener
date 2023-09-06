@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/wifiAdapter.cpp" INCLUDE_DIRS "include" REQUIRES networkAdapter)

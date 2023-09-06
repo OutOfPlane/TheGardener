@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/tca9534.cpp" INCLUDE_DIRS "include" REQUIRES i2cPort portExpander)

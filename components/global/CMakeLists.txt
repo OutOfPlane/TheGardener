@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/global.cpp" INCLUDE_DIRS "include" REQUIRES i2cPort portExpander ioPin systemInfo networkAdapter)
