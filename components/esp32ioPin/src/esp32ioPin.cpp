@@ -30,7 +30,8 @@ g_err esp32ioPin::mode(pinDirection dir)
         // set as output mode
         io_conf.mode = GPIO_MODE_OUTPUT;
         // bit mask of the pins that you want to set,e.g.GPIO18/19
-        io_conf.pin_bit_mask = (1 << _pinNumber);
+        io_conf.pin_bit_mask = _pinNumber;
+        io_conf.pin_bit_mask = 1ull << io_conf.pin_bit_mask;
         // disable pull-down mode
         io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
         // disable pull-up mode
@@ -47,7 +48,8 @@ g_err esp32ioPin::mode(pinDirection dir)
         // set as output mode
         io_conf.mode = GPIO_MODE_INPUT;
         // bit mask of the pins that you want to set,e.g.GPIO18/19
-        io_conf.pin_bit_mask = (1 << _pinNumber);
+        io_conf.pin_bit_mask = _pinNumber;
+        io_conf.pin_bit_mask = 1ull << io_conf.pin_bit_mask;
         // disable pull-down mode
         io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
         // disable pull-up mode
