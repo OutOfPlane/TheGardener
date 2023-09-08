@@ -1,5 +1,5 @@
 #ifndef G_VERSION_H
 #define G_VERSION_H
-#define G_CODE_BUILD 87
+#define G_CODE_BUILD 107
 
 #endif

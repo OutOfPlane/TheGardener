@@ -10,6 +10,8 @@
 #include <esp32ioPin.hpp>
 #include <tca9534.hpp>
 #include <ads7828.hpp>
+#include <externalMux.hpp>
+#include <muxedPin.hpp>
 
 using namespace gardener;
 
@@ -46,6 +48,7 @@ void main_task(void *pvParameter)
 
     TCA9534 myPortExpander("TCA9534", global::systemBus);
     ads7828 myADC("ADS7828", global::systemBus);
+    
 
     
     
@@ -76,6 +79,21 @@ void main_task(void *pvParameter)
 
     global::enable12VA = new esp32ioPin("12VA_EN", 4);
 
+    global::HC4051S0 = myPortExpander.getIOPin(0);
+    global::HC4051S1 = myPortExpander.getIOPin(1);
+    global::HC4051S2 = myPortExpander.getIOPin(2);
+    externalMux myMux("HC4051", 8, global::HC4051S0, global::HC4051S1, global::HC4051S2);
+
+    adcPin muxADC("muxADC", 7, &myADC, 1);
+    global::iSense_LED_RD = new muxedPin("iADC_RD", &muxADC, &myMux, 0);
+    global::iSense_LED_GN = new muxedPin("iADC_GN", &muxADC, &myMux, 1);
+    global::iSense_LED_BL = new muxedPin("iADC_BL", &muxADC, &myMux, 2);
+    global::iSense_LED_WH = new muxedPin("iADC_WH", &muxADC, &myMux, 3);
+    global::iSense_MOT = new muxedPin("iADC_MOT", &muxADC, &myMux, 4);
+    global::iSense_AUX1 = new muxedPin("iADC_AUX1", &muxADC, &myMux, 5);
+    global::iSense_AUX2 = new muxedPin("iADC_AUX2", &muxADC, &myMux, 6);
+
+
     global::LED_STAT_RDY = myPortExpander.getIOPin(7);
     global::LED_STAT_STA = myPortExpander.getIOPin(6);
     global::LED_STAT_ERR = myPortExpander.getIOPin(5);
@@ -97,6 +115,9 @@ void main_task(void *pvParameter)
     global::LED_STAT_RDY->mode(PIN_OUTPUT);
     global::LED_STAT_STA->mode(PIN_OUTPUT);
     global::LED_STAT_ERR->mode(PIN_OUTPUT);
+    global::HC4051S0->mode(PIN_OUTPUT);
+    global::HC4051S1->mode(PIN_OUTPUT);
+    global::HC4051S2->mode(PIN_OUTPUT);
 
     global::LED_RD->mode(PIN_OUTPUT_PWM);
     global::LED_GN->mode(PIN_OUTPUT_PWM);
@@ -116,8 +137,32 @@ void main_task(void *pvParameter)
     {
         int32_t val_mV = 0;
         global::AIN2->getVoltage(val_mV);
-        global::LED_GN->setVoltage(3300 - ((val_mV-500)*10));
-        vTaskDelay(10/portTICK_RATE_MS);
+        global::LED_GN->setVoltage(3300);
+        vTaskDelay(1000/portTICK_RATE_MS);
+
+        G_ERROR_DECODE(global::iSense_LED_RD->getVoltage(val_mV));
+        G_LOGI("i_RD: %d mV", val_mV);
+        vTaskDelay(100/portTICK_RATE_MS);
+        global::iSense_LED_RD->getVoltage(val_mV);
+        G_LOGI("i_RD: %d mV", val_mV);
+
+        global::iSense_LED_GN->getVoltage(val_mV);
+        G_LOGI("i_GN: %d mV", val_mV);
+        vTaskDelay(100/portTICK_RATE_MS);
+        global::iSense_LED_GN->getVoltage(val_mV);
+        G_LOGI("i_GN: %d mV", val_mV);
+        
+        global::iSense_LED_BL->getVoltage(val_mV);
+        G_LOGI("i_BL: %d mV", val_mV);
+        vTaskDelay(100/portTICK_RATE_MS);
+        global::iSense_LED_BL->getVoltage(val_mV);
+        G_LOGI("i_BL: %d mV", val_mV);
+
+        global::iSense_LED_WH->getVoltage(val_mV);
+        G_LOGI("i_WH: %d mV", val_mV);
+        vTaskDelay(100/portTICK_RATE_MS);
+        global::iSense_LED_WH->getVoltage(val_mV);
+        G_LOGI("i_WH: %d mV", val_mV);
 
 
 
