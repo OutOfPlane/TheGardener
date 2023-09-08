@@ -12,10 +12,31 @@
 #include <ads7828.hpp>
 #include <externalMux.hpp>
 #include <muxedPin.hpp>
+#include <httpClient.hpp>
+#include <wifiAdapter.hpp>
 
 using namespace gardener;
 
 void main_task(void *pvParameter);
+
+httpClient errClient("EHTTP");
+int webLogHandler(const char *pattern, va_list lst)
+{
+    if (pattern[0] == '\033' && pattern[7] == 'E')
+    {
+        if (errClient.lock(errClient))
+        {
+            char msg[512];
+            vsprintf(msg, pattern + 9, lst);
+            if (errClient.getPrintf(msg, 511, "https://api.graviplant-online.de/v1/reportError/?sn=%s&msg=%s",
+                                    global::systemInfo.hardware.hardwareID,
+                                    msg) == G_OK)
+                printf("*");
+            errClient.unlock();
+        }
+    }
+    return vprintf(pattern, lst);
+}
 
 extern "C" void app_main()
 {
@@ -30,8 +51,6 @@ void main_task(void *pvParameter)
     const char *_name = "main";
     vTaskDelay(4000 / portTICK_RATE_MS);
 
-    
-
     //------BEGIN-Common HW Config--------------
     global::systemBus = new i2cPort("i2cSys", i2c0, 22, 21);
     //------END-Common HW Config----------------
@@ -40,7 +59,7 @@ void main_task(void *pvParameter)
     {
         bool prsnt = false;
         global::systemBus->present(i, prsnt);
-        if(prsnt)
+        if (prsnt)
         {
             G_LOGI("DEV %02X is present", i);
         }
@@ -48,11 +67,6 @@ void main_task(void *pvParameter)
 
     TCA9534 myPortExpander("TCA9534", global::systemBus);
     ads7828 myADC("ADS7828", global::systemBus);
-    
-
-    
-    
-    
 
     //------BEGIN-IO-Hardware--------------
     global::OUT1 = new esp32ioPin("OUT1", 32);
@@ -71,7 +85,6 @@ void main_task(void *pvParameter)
     global::LED_GN = new esp32ioPin("LED_GN", 13);
     global::LED_BL = new esp32ioPin("LED_BL", 16);
     global::LED_WH = new esp32ioPin("LED_WH", 17);
-
 
     global::senseVIN = new adcPin("VIN_sense", 2, &myADC, 10);
     global::sense12VA = new adcPin("12VA_sense", 6, &myADC, 10);
@@ -93,7 +106,6 @@ void main_task(void *pvParameter)
     global::iSense_AUX1 = new muxedPin("iADC_AUX1", &muxADC, &myMux, 5);
     global::iSense_AUX2 = new muxedPin("iADC_AUX2", &muxADC, &myMux, 6);
 
-
     global::LED_STAT_RDY = myPortExpander.getIOPin(7);
     global::LED_STAT_STA = myPortExpander.getIOPin(6);
     global::LED_STAT_ERR = myPortExpander.getIOPin(5);
@@ -103,7 +115,15 @@ void main_task(void *pvParameter)
     global::systemInfo = identifySystem();
     printf("Starting TheGardener v. %s\r\n", getFirmwareStringLong());
     printf("Dectedted Hardware: %s\r\n", getPCBRevisionString(global::systemInfo.hardware.PCBRev));
-    
+    uint8_t buf[8];
+    esp_read_mac(buf, ESP_MAC_WIFI_STA);
+
+    asprintf(&global::systemInfo.hardware.hardwareID, "%02X%02X%02X%02X%02X%02X",
+             buf[0], buf[1], buf[2],
+             buf[3], buf[4], buf[5]);
+
+    G_LOGI("My ID is: %s", global::systemInfo.hardware.hardwareID);
+
     //------END-Automatic System Configuration----------------
 
     // esp_log_set_vprintf(webLogHandler);
@@ -133,38 +153,58 @@ void main_task(void *pvParameter)
     global::enable12VA->mode(PIN_OUTPUT);
     global::enable12VA->set(1);
 
+    httpClient myClient("http");
+    uint16_t bufSz = 256;
+    char outBuf[bufSz];
+
+    wifiAdapter adapt("WiFi", 10);
+
+    adapt.setSSID("PeanutPay");
+    adapt.setPWD("PeanutPay");
+    adapt.start();
+    adapt.startConnect();
+    adapt.waitConnected();
+
+    esp_log_set_vprintf(webLogHandler);
+
     while (1)
     {
         int32_t val_mV = 0;
         global::AIN2->getVoltage(val_mV);
         global::LED_GN->setVoltage(3300);
-        vTaskDelay(1000/portTICK_RATE_MS);
+        vTaskDelay(1000 / portTICK_RATE_MS);
 
-        G_ERROR_DECODE(global::iSense_LED_RD->getVoltage(val_mV));
+        global::iSense_LED_RD->getVoltage(val_mV);
         G_LOGI("i_RD: %d mV", val_mV);
-        vTaskDelay(100/portTICK_RATE_MS);
+        vTaskDelay(100 / portTICK_RATE_MS);
         global::iSense_LED_RD->getVoltage(val_mV);
         G_LOGI("i_RD: %d mV", val_mV);
 
         global::iSense_LED_GN->getVoltage(val_mV);
         G_LOGI("i_GN: %d mV", val_mV);
-        vTaskDelay(100/portTICK_RATE_MS);
+        vTaskDelay(100 / portTICK_RATE_MS);
         global::iSense_LED_GN->getVoltage(val_mV);
         G_LOGI("i_GN: %d mV", val_mV);
-        
+
         global::iSense_LED_BL->getVoltage(val_mV);
         G_LOGI("i_BL: %d mV", val_mV);
-        vTaskDelay(100/portTICK_RATE_MS);
+        vTaskDelay(100 / portTICK_RATE_MS);
         global::iSense_LED_BL->getVoltage(val_mV);
         G_LOGI("i_BL: %d mV", val_mV);
 
         global::iSense_LED_WH->getVoltage(val_mV);
         G_LOGI("i_WH: %d mV", val_mV);
-        vTaskDelay(100/portTICK_RATE_MS);
+        vTaskDelay(100 / portTICK_RATE_MS);
         global::iSense_LED_WH->getVoltage(val_mV);
         G_LOGI("i_WH: %d mV", val_mV);
 
+        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/water/?sn=%s", global::systemInfo.hardware.hardwareID);
+        printf("%s\r\n", outBuf);
 
+        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s", global::systemInfo.hardware.hardwareID);
+        printf("%s\r\n", outBuf);
+
+        G_ERROR_DECODE(G_ERR_NO_IMPLEMENTATION);
 
         // global::OUT2->set(0);
         // global::OUT1->set(1);
@@ -186,7 +226,4 @@ void main_task(void *pvParameter)
         // global::senseVIN->getVoltage(val_mV);
         // G_LOGI("VIN: %d mV", val_mV);
     }
-    
-    
 }
-
