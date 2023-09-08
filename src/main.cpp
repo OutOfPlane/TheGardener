@@ -61,9 +61,20 @@ void main_task(void *pvParameter)
     global::AIN2 = new adcPin("AIN2", 1, &myADC, 2);
     global::AIN3 = new adcPin("AIN3", 5, &myADC, 2);
 
-    global::Sense_VIN = new adcPin("VIN_sense", 2, &myADC, 10);
-    global::Sense_12V0 = new adcPin("12V0_sense", 6, &myADC, 10);
-    global::Sense_3V3 = new adcPin("3V3_sense", 3, &myADC, 2);
+    global::AUX1 = myPortExpander.getIOPin(3);
+    global::AUX2 = myPortExpander.getIOPin(4);
+
+    global::LED_RD = new esp32ioPin("LED_RD", 14);
+    global::LED_GN = new esp32ioPin("LED_GN", 13);
+    global::LED_BL = new esp32ioPin("LED_BL", 16);
+    global::LED_WH = new esp32ioPin("LED_WH", 17);
+
+
+    global::senseVIN = new adcPin("VIN_sense", 2, &myADC, 10);
+    global::sense12VA = new adcPin("12VA_sense", 6, &myADC, 10);
+    global::sense3V3 = new adcPin("3V3_sense", 3, &myADC, 2);
+
+    global::enable12VA = new esp32ioPin("12VA_EN", 4);
 
     global::LED_STAT_RDY = myPortExpander.getIOPin(7);
     global::LED_STAT_STA = myPortExpander.getIOPin(6);
@@ -81,29 +92,54 @@ void main_task(void *pvParameter)
 
     global::OUT1->mode(PIN_OUTPUT);
     global::OUT2->mode(PIN_OUTPUT);
+    global::AUX1->mode(PIN_OUTPUT);
+    global::AUX2->mode(PIN_OUTPUT);
     global::LED_STAT_RDY->mode(PIN_OUTPUT);
     global::LED_STAT_STA->mode(PIN_OUTPUT);
     global::LED_STAT_ERR->mode(PIN_OUTPUT);
 
+    global::LED_RD->mode(PIN_OUTPUT_PWM);
+    global::LED_GN->mode(PIN_OUTPUT_PWM);
+    global::LED_BL->mode(PIN_OUTPUT_PWM);
+    global::LED_WH->mode(PIN_OUTPUT_PWM);
+
+    global::AUX1->set(0);
+    global::AUX2->set(0);
     global::LED_STAT_RDY->set(0);
     global::LED_STAT_STA->set(0);
     global::LED_STAT_ERR->set(0);
 
+    global::enable12VA->mode(PIN_OUTPUT);
+    global::enable12VA->set(1);
+
     while (1)
     {
-        global::OUT2->set(0);
-        global::OUT1->set(1);
-        vTaskDelay(1000/portTICK_RATE_MS);
-        global::OUT2->set(1);
-        global::OUT1->set(0);
-        vTaskDelay(1000/portTICK_RATE_MS);
         int32_t val_mV = 0;
-        global::AIN1->getVoltage(val_mV);
-        G_LOGI("Voltage1 %d mV", val_mV);
         global::AIN2->getVoltage(val_mV);
-        G_LOGI("Voltage2 %d mV", val_mV);
-        global::Sense_3V3->getVoltage(val_mV);
-        G_LOGI("3v3: %d mV", val_mV);
+        global::LED_GN->setVoltage(3300 - ((val_mV-500)*10));
+        vTaskDelay(10/portTICK_RATE_MS);
+
+
+
+        // global::OUT2->set(0);
+        // global::OUT1->set(1);
+        // vTaskDelay(1000/portTICK_RATE_MS);
+        // global::LED_GN->setVoltage(1000);
+        // global::OUT2->set(1);
+        // global::OUT1->set(0);
+        // vTaskDelay(1000/portTICK_RATE_MS);
+        // global::LED_GN->setVoltage(500);
+        // int32_t val_mV = 0;
+        // global::AIN1->getVoltage(val_mV);
+        // G_LOGI("Voltage1 %d mV", val_mV);
+        // global::AIN2->getVoltage(val_mV);
+        // G_LOGI("Voltage2 %d mV", val_mV);
+        // global::sense3V3->getVoltage(val_mV);
+        // G_LOGI("3v3: %d mV", val_mV);
+        // global::sense12VA->getVoltage(val_mV);
+        // G_LOGI("12VA: %d mV", val_mV);
+        // global::senseVIN->getVoltage(val_mV);
+        // G_LOGI("VIN: %d mV", val_mV);
     }
     
     
