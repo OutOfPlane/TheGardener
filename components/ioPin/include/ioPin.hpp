@@ -12,6 +12,7 @@ namespace gardener
         PIN_INPUT_PULLDOWN,
         PIN_OUTPUT,
         PIN_OUTPUT_OPEN_DRAIN,
+        PIN_OUTPUT_PWM
     };
 
     class ioPin : public gardenObject
