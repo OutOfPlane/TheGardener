@@ -8,9 +8,7 @@ namespace gardener
 {
     enum PCBRevision{
         PCB_Revision_Unknown,
-        PCB_Revision_G,
-        PCB_Revision_2_1,
-        PCB_Revision_2_2
+        PCB_Revision_2_0
     };
 
     typedef struct{
