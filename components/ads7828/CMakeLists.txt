@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/ads7828.cpp" INCLUDE_DIRS "include" REQUIRES i2cPort ADC)
