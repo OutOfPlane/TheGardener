@@ -6,7 +6,7 @@ using namespace gardener;
 #define REG_OUTPUT_PORT 0x01
 #define REG_INVERT_PORT 0x02
 #define REG_CONFIG_PORT 0x03
-#define DEV_ADDR 0x23
+#define DEV_ADDR 0x38
 #define DEV_SPEED 100000
 
 gardener::TCA9534::TCA9534(const char *name, i2cPort *port)
