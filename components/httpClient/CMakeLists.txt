@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/httpClient.cpp" INCLUDE_DIRS "include" REQUIRES gardenObject esp_http_client mbedtls)
