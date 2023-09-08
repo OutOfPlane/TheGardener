@@ -28,9 +28,11 @@ ioPin *global::LED_STAT_ERR;
 i2cPort *global::systemBus;
 
 // internal PINS
-ioPin *global::Sense_12V0;
-ioPin *global::Sense_3V3;
-ioPin *global::Sense_VIN;
+ioPin *global::sense12VA;
+ioPin *global::sense3V3;
+ioPin *global::senseVIN;
+
+ioPin *global::enable12VA;
 
 // Protocols/Drivers
 networkAdapter *global::connectivity;

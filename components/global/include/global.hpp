@@ -34,9 +34,11 @@ namespace gardener
         extern ioPin *LED_STAT_ERR;
 
         //internal PINS
-        extern ioPin *Sense_12V0;
-        extern ioPin *Sense_3V3;
-        extern ioPin *Sense_VIN;
+        extern ioPin *sense12VA;
+        extern ioPin *sense3V3;
+        extern ioPin *senseVIN;
+
+        extern ioPin *enable12VA;
 
 
         //I2C-Ports
