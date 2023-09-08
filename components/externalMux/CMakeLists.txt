@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/externalMux.cpp" INCLUDE_DIRS "include" REQUIRES gardenObject ioPin)
