@@ -15,6 +15,11 @@ namespace gardener
         g_err get(uint8_t &value);
         bool canSet();
         bool canGet();
+        g_err setVoltage(int32_t voltage_mV);
+
+    private:
+        static uint8_t _ledc_channel;
+        static uint8_t _ledc_timer_config_done;
     };
 
 } // namespace gardener
