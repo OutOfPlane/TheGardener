@@ -2,21 +2,35 @@
 
 using namespace gardener;
 
-
-i2cPort *global::systemBus = nullptr;
-i2cPort *global::expansionBus = nullptr;
-
-portExpander *global::extraPins = nullptr;
-
-ioPin *global::pinNetworkStatus = nullptr;
-ioPin *global::pinServerStatus = nullptr;
-ioPin *global::pinTimeStatus = nullptr;
-ioPin *global::pinMDBStatus = nullptr;
-ioPin *global::pinBusyStatus = nullptr;
-ioPin *global::pinErrorStatus = nullptr;
-ioPin *global::pinBtnConfig = nullptr;
-ioPin *global::pinUSBOvercurrent = nullptr;
-
+// Variables
 sysInfo_t global::systemInfo;
 
-networkAdapter *global::connectivity = nullptr;
+// PINs
+ioPin *global::OUT1;
+ioPin *global::OUT2;
+ioPin *global::IN1;
+ioPin *global::IN2;
+ioPin *global::AIN0;
+ioPin *global::AIN1;
+ioPin *global::AIN2;
+ioPin *global::AIN3;
+ioPin *global::AOUT;
+ioPin *global::AUX1;
+ioPin *global::AUX2;
+ioPin *global::LED_RD;
+ioPin *global::LED_GN;
+ioPin *global::LED_BL;
+ioPin *global::LED_WH;
+ioPin *global::LED_STAT_RDY;
+ioPin *global::LED_STAT_STA;
+ioPin *global::LED_STAT_ERR;
+// I2C-Ports
+i2cPort *global::systemBus;
+
+// internal PINS
+ioPin *global::Sense_12V0;
+ioPin *global::Sense_3V3;
+ioPin *global::Sense_VIN;
+
+// Protocols/Drivers
+networkAdapter *global::connectivity;

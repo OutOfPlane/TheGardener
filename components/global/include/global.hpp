@@ -13,22 +13,34 @@ namespace gardener
         //Variables
         extern sysInfo_t systemInfo;
 
-        //PINs        
-        extern ioPin *pinNetworkStatus;
-        extern ioPin *pinServerStatus;
-        extern ioPin *pinTimeStatus;
-        extern ioPin *pinMDBStatus;
-        extern ioPin *pinBusyStatus;
-        extern ioPin *pinErrorStatus;
-        extern ioPin *pinBtnConfig;
-        extern ioPin *pinUSBOvercurrent;
+        //External PINs        
+        extern ioPin *OUT1;
+        extern ioPin *OUT2;
+        extern ioPin *IN1;
+        extern ioPin *IN2;
+        extern ioPin *AIN0;
+        extern ioPin *AIN1;
+        extern ioPin *AIN2;
+        extern ioPin *AIN3;
+        extern ioPin *AOUT;
+        extern ioPin *AUX1;
+        extern ioPin *AUX2;
+        extern ioPin *LED_RD;
+        extern ioPin *LED_GN;
+        extern ioPin *LED_BL;
+        extern ioPin *LED_WH;
+        extern ioPin *LED_STAT_RDY;
+        extern ioPin *LED_STAT_STA;
+        extern ioPin *LED_STAT_ERR;
+
+        //internal PINS
+        extern ioPin *Sense_12V0;
+        extern ioPin *Sense_3V3;
+        extern ioPin *Sense_VIN;
+
 
         //I2C-Ports
         extern i2cPort *systemBus;
-        extern i2cPort *expansionBus;
-
-        //Hardware
-        extern portExpander *extraPins;
 
         //Protocols/Drivers
         extern networkAdapter *connectivity;
