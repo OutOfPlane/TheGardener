@@ -40,6 +40,18 @@ namespace gardener
 
         extern ioPin *enable12VA;
 
+        extern ioPin *HC4051S0;
+        extern ioPin *HC4051S1;
+        extern ioPin *HC4051S2;
+
+        extern ioPin *iSense_LED_RD;
+        extern ioPin *iSense_LED_GN;
+        extern ioPin *iSense_LED_BL;
+        extern ioPin *iSense_LED_WH;
+        extern ioPin *iSense_MOT;
+        extern ioPin *iSense_AUX1;
+        extern ioPin *iSense_AUX2;
+
 
         //I2C-Ports
         extern i2cPort *systemBus;

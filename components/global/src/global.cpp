@@ -34,5 +34,17 @@ ioPin *global::senseVIN;
 
 ioPin *global::enable12VA;
 
+ioPin *global::HC4051S0;
+ioPin *global::HC4051S1;
+ioPin *global::HC4051S2;
+
+ioPin *global::iSense_LED_RD;
+ioPin *global::iSense_LED_GN;
+ioPin *global::iSense_LED_BL;
+ioPin *global::iSense_LED_WH;
+ioPin *global::iSense_MOT;
+ioPin *global::iSense_AUX1;
+ioPin *global::iSense_AUX2;
+
 // Protocols/Drivers
 networkAdapter *global::connectivity;
