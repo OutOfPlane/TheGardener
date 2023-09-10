@@ -16,9 +16,13 @@
 #include <wifiAdapter.hpp>
 #include <captivePortal.hpp>
 
+#include "webpage.h"
+
 using namespace gardener;
 
 void main_task(void *pvParameter);
+
+esp_err_t configPageHandler(httpd_req_t *req);
 
 httpClient errClient("EHTTP");
 int webLogHandler(const char *pattern, va_list lst)
@@ -46,6 +50,8 @@ extern "C" void app_main()
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     xTaskCreate(&main_task, "main_task", 16384, NULL, 5, NULL);
 }
+
+wifiAdapter adaptWiFi("WiFi", 10);
 
 void main_task(void *pvParameter)
 {
@@ -158,19 +164,22 @@ void main_task(void *pvParameter)
     uint16_t bufSz = 256;
     char outBuf[bufSz];
 
-    wifiAdapter adapt("WiFi", 10);
+    adaptWiFi.start();
+    adaptWiFi.setSSID("PeanutPay");
+    adaptWiFi.setPWD("PeanutPay");
 
-    // adapt.setSSID("PeanutPay");
-    // adapt.setPWD("PeanutPay");
-    // adapt.start();
-    // adapt.startConnect();
-    // adapt.waitConnected();
+    char tmpSSID[33];
+    sprintf(tmpSSID, "GraviPlant%s", global::systemInfo.hardware.hardwareID);
 
-    adapt.startSTA(global::systemInfo.hardware.hardwareID, "");
+    adaptWiFi.startSTA(tmpSSID, "");
 
-    captivePortal prtl("portal", adapt.getNetIFAP());
+    adaptWiFi.startConnect();
+
+    captivePortal prtl("portal", adaptWiFi.getNetIFAP());
 
     prtl.start();
+
+    prtl.on("/config", configPageHandler);
 
     esp_log_set_vprintf(webLogHandler);
 
@@ -215,7 +224,7 @@ void main_task(void *pvParameter)
 
         // G_ERROR_DECODE(G_ERR_NO_IMPLEMENTATION);
 
-        //data url: https://api.graviplant-online.de/v1/telemetry/?sn=test&temp=23.5&humid=80.5
+        // data url: https://api.graviplant-online.de/v1/telemetry/?sn=test&temp=23.5&humid=80.5
 
         // global::OUT2->set(0);
         // global::OUT1->set(1);
@@ -237,4 +246,42 @@ void main_task(void *pvParameter)
         // global::senseVIN->getVoltage(val_mV);
         // G_LOGI("VIN: %d mV", val_mV);
     }
+}
+
+char pageBuff[1024];
+
+esp_err_t configPageHandler(httpd_req_t *req)
+{
+    captivePortal *prtl = (captivePortal *)req->user_ctx;
+    const char *_name = prtl->getName();
+
+    httpd_resp_send_chunk(req, webpageHeader1, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, "GraviPlant Status", HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, webpageHeader2, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(pageBuff, R"EOF(
+    <nav>
+    <b>GraviPlant</b>
+    %s
+    </nav>
+    <div>
+    <h1>Status</h1>)EOF",
+            global::systemInfo.hardware.hardwareID);
+    httpd_resp_send_chunk(req, pageBuff, HTTPD_RESP_USE_STRLEN);
+
+    char tmpSSID[32];
+    adaptWiFi.getSSID(tmpSSID);
+
+    sprintf(pageBuff, R"EOF(
+    Wifi: %s - <strong>%s</strong>)EOF",
+            tmpSSID, adaptWiFi.getStateName());
+    httpd_resp_send_chunk(req, pageBuff, HTTPD_RESP_USE_STRLEN);
+
+    httpd_resp_send_chunk(req, "</div>", HTTPD_RESP_USE_STRLEN);
+
+    httpd_resp_send_chunk(req, webpageFooter, HTTPD_RESP_USE_STRLEN);
+
+    httpd_resp_send_chunk(req, nullptr, 0);
+
+    return ESP_OK;
 }
