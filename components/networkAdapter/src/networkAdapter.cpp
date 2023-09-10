@@ -2,8 +2,13 @@
 
 using namespace gardener;
 
+#define X(typeID, name) name,
+const char *_NetworkToString[]{
+    G_NETWORK_STATE};
+#undef X
+
 networkAdapter::networkAdapter(const char *name)
-    : gardenObject(name), _netif(nullptr)
+    : gardenObject(name), _netif(nullptr), _state(G_NETWORK_UNINITIALIZED)
 {
 }
 
@@ -31,4 +36,14 @@ g_err networkAdapter::start()
 esp_netif_t *networkAdapter::getNetIF()
 {
     return _netif;
+}
+
+g_network_state gardener::networkAdapter::getState()
+{
+    return _state;
+}
+
+const char *gardener::networkAdapter::getStateName()
+{
+    return _NetworkToString[_state];
 }
