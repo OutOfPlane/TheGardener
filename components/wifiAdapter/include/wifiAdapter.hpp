@@ -13,6 +13,7 @@ namespace gardener
         wifiAdapter(const char *name, int maxRetries);
         virtual ~wifiAdapter() {}
         g_err setSSID(const char *SSID);
+        g_err getSSID(char *SSID);
         g_err setPWD(const char *PWD);
         g_err startConnect();
         g_err waitConnected();

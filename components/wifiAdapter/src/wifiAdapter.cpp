@@ -24,6 +24,13 @@ g_err wifiAdapter::setSSID(const char *SSID)
     return G_OK;
 }
 
+g_err gardener::wifiAdapter::getSSID(char *SSID)
+{
+    esp_wifi_get_config(WIFI_IF_STA, &_config);
+    strcpy(SSID, (char *)_config.sta.ssid);
+    return G_OK;
+}
+
 g_err gardener::wifiAdapter::setPWD(const char *PWD)
 {
     // TODO: handle errors
@@ -38,9 +45,11 @@ g_err gardener::wifiAdapter::startConnect()
     // TODO: handle errors
     if (_wifiStarted)
     {
-        esp_wifi_stop();
+        ESP_ERROR_CHECK(esp_wifi_connect());
+    }else{
+        ESP_ERROR_CHECK(esp_wifi_start());
     }
-    ESP_ERROR_CHECK(esp_wifi_start());
+    
     _wifiStarted = true;
     return G_OK;
 }
@@ -78,6 +87,11 @@ g_err wifiAdapter::waitConnected()
 g_err gardener::wifiAdapter::startSTA(const char *SSID, const char *PWD)
 {
     g_err erg = G_ERR_UNK;
+
+    if (_wifiStarted)
+    {
+        esp_wifi_stop();
+    }
 
     _ap_netif = esp_netif_create_default_wifi_ap();
     assert(_ap_netif);
@@ -125,11 +139,6 @@ g_err gardener::wifiAdapter::startSTA(const char *SSID, const char *PWD)
 
     G_LOGI("starting WiFi access point: SSID: %s password:%s channel: %d",
            SSID, PWD, 1);
-
-    if (_wifiStarted)
-    {
-        esp_wifi_stop();
-    }
 
     ESP_ERROR_CHECK(esp_wifi_start());
     _wifiStarted = true;
@@ -200,6 +209,7 @@ void wifiAdapter::_eventHandler(void *arg, esp_event_base_t event_base, int32_t 
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
         esp_wifi_connect();
+        ctx->_state = G_NETWORK_CONNECTING;
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
@@ -208,10 +218,12 @@ void wifiAdapter::_eventHandler(void *arg, esp_event_base_t event_base, int32_t 
             esp_wifi_connect();
             ctx->_retryNum++;
             G_LOGI("retry to connect to the AP");
+            ctx->_state = G_NETWORK_RECONNECTING;
         }
         else
         {
             xEventGroupSetBits(ctx->_event_group, WIFI_FAIL_BIT);
+            ctx->_state = G_NETWORK_DISCONNECTED;
         }
         G_LOGI("connect to the AP fail");
     }
@@ -220,6 +232,7 @@ void wifiAdapter::_eventHandler(void *arg, esp_event_base_t event_base, int32_t 
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         G_LOGI("got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         ctx->_retryNum = 0;
+        ctx->_state = G_NETWORK_CONNECTED;
         xEventGroupSetBits(ctx->_event_group, WIFI_CONNECTED_BIT);
     }
 }
