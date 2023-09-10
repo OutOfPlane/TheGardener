@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "*.tcc": "cpp",
-        "mutex": "cpp"
+        "mutex": "cpp",
+        "*.ipp": "cpp"
     }
 }

@@ -14,6 +14,7 @@
 #include <muxedPin.hpp>
 #include <httpClient.hpp>
 #include <wifiAdapter.hpp>
+#include <captivePortal.hpp>
 
 using namespace gardener;
 
@@ -159,52 +160,62 @@ void main_task(void *pvParameter)
 
     wifiAdapter adapt("WiFi", 10);
 
-    adapt.setSSID("PeanutPay");
-    adapt.setPWD("PeanutPay");
-    adapt.start();
-    adapt.startConnect();
-    adapt.waitConnected();
+    // adapt.setSSID("PeanutPay");
+    // adapt.setPWD("PeanutPay");
+    // adapt.start();
+    // adapt.startConnect();
+    // adapt.waitConnected();
+
+    adapt.startSTA(global::systemInfo.hardware.hardwareID, "");
+
+    captivePortal prtl("portal", adapt.getNetIFAP());
+
+    prtl.start();
 
     esp_log_set_vprintf(webLogHandler);
 
     while (1)
     {
-        int32_t val_mV = 0;
-        global::AIN2->getVoltage(val_mV);
-        global::LED_GN->setVoltage(3300);
+        // int32_t val_mV = 0;
+        // global::AIN2->getVoltage(val_mV);
+        // global::LED_GN->setVoltage(3300);
+        // vTaskDelay(1000 / portTICK_RATE_MS);
+
+        // global::iSense_LED_RD->getVoltage(val_mV);
+        // G_LOGI("i_RD: %d mV", val_mV);
+        // vTaskDelay(100 / portTICK_RATE_MS);
+        // global::iSense_LED_RD->getVoltage(val_mV);
+        // G_LOGI("i_RD: %d mV", val_mV);
+
+        // global::iSense_LED_GN->getVoltage(val_mV);
+        // G_LOGI("i_GN: %d mV", val_mV);
+        // vTaskDelay(100 / portTICK_RATE_MS);
+        // global::iSense_LED_GN->getVoltage(val_mV);
+        // G_LOGI("i_GN: %d mV", val_mV);
+
+        // global::iSense_LED_BL->getVoltage(val_mV);
+        // G_LOGI("i_BL: %d mV", val_mV);
+        // vTaskDelay(100 / portTICK_RATE_MS);
+        // global::iSense_LED_BL->getVoltage(val_mV);
+        // G_LOGI("i_BL: %d mV", val_mV);
+
+        // global::iSense_LED_WH->getVoltage(val_mV);
+        // G_LOGI("i_WH: %d mV", val_mV);
+        // vTaskDelay(100 / portTICK_RATE_MS);
+        // global::iSense_LED_WH->getVoltage(val_mV);
+        // G_LOGI("i_WH: %d mV", val_mV);
+
+        // myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/water/?sn=%s", global::systemInfo.hardware.hardwareID);
+        // printf("%s\r\n", outBuf);
+
+        // myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s", global::systemInfo.hardware.hardwareID);
+        // printf("%s\r\n", outBuf);
+
         vTaskDelay(1000 / portTICK_RATE_MS);
 
-        global::iSense_LED_RD->getVoltage(val_mV);
-        G_LOGI("i_RD: %d mV", val_mV);
-        vTaskDelay(100 / portTICK_RATE_MS);
-        global::iSense_LED_RD->getVoltage(val_mV);
-        G_LOGI("i_RD: %d mV", val_mV);
+        // G_ERROR_DECODE(G_ERR_NO_IMPLEMENTATION);
 
-        global::iSense_LED_GN->getVoltage(val_mV);
-        G_LOGI("i_GN: %d mV", val_mV);
-        vTaskDelay(100 / portTICK_RATE_MS);
-        global::iSense_LED_GN->getVoltage(val_mV);
-        G_LOGI("i_GN: %d mV", val_mV);
-
-        global::iSense_LED_BL->getVoltage(val_mV);
-        G_LOGI("i_BL: %d mV", val_mV);
-        vTaskDelay(100 / portTICK_RATE_MS);
-        global::iSense_LED_BL->getVoltage(val_mV);
-        G_LOGI("i_BL: %d mV", val_mV);
-
-        global::iSense_LED_WH->getVoltage(val_mV);
-        G_LOGI("i_WH: %d mV", val_mV);
-        vTaskDelay(100 / portTICK_RATE_MS);
-        global::iSense_LED_WH->getVoltage(val_mV);
-        G_LOGI("i_WH: %d mV", val_mV);
-
-        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/water/?sn=%s", global::systemInfo.hardware.hardwareID);
-        printf("%s\r\n", outBuf);
-
-        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s", global::systemInfo.hardware.hardwareID);
-        printf("%s\r\n", outBuf);
-
-        G_ERROR_DECODE(G_ERR_NO_IMPLEMENTATION);
+        //data url: https://api.graviplant-online.de/v1/telemetry/?sn=test&temp=23.5&humid=80.5
 
         // global::OUT2->set(0);
         // global::OUT1->set(1);
