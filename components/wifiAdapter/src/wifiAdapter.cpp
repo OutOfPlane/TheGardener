@@ -17,32 +17,37 @@ wifiAdapter::wifiAdapter(const char *name, int maxRetries)
 
 g_err wifiAdapter::setSSID(const char *SSID)
 {
-    //TODO: handle errors
+    // TODO: handle errors
     esp_wifi_get_config(WIFI_IF_STA, &_config);
-    strcpy((char*)_config.sta.ssid, SSID);
+    strcpy((char *)_config.sta.ssid, SSID);
     esp_wifi_set_config(WIFI_IF_STA, &_config);
     return G_OK;
 }
 
 g_err gardener::wifiAdapter::setPWD(const char *PWD)
 {
-    //TODO: handle errors
+    // TODO: handle errors
     esp_wifi_get_config(WIFI_IF_STA, &_config);
-    strcpy((char*)_config.sta.password, PWD);
+    strcpy((char *)_config.sta.password, PWD);
     esp_wifi_set_config(WIFI_IF_STA, &_config);
     return G_OK;
 }
 
 g_err gardener::wifiAdapter::startConnect()
 {
-    //TODO: handle errors
+    // TODO: handle errors
+    if (_wifiStarted)
+    {
+        esp_wifi_stop();
+    }
     ESP_ERROR_CHECK(esp_wifi_start());
+    _wifiStarted = true;
     return G_OK;
 }
 
 g_err wifiAdapter::waitConnected()
 {
-      /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
+    /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
      * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
     EventBits_t bits = xEventGroupWaitBits(_event_group,
                                            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
@@ -55,19 +60,85 @@ g_err wifiAdapter::waitConnected()
     if (bits & WIFI_CONNECTED_BIT)
     {
         G_LOGI("connected to ap SSID:%s password:%s",
-                TEST_SSID, TEST_PWD);
+               TEST_SSID, TEST_PWD);
     }
     else if (bits & WIFI_FAIL_BIT)
     {
         G_LOGI("Failed to connect to SSID:%s, password:%s",
-                TEST_SSID, TEST_PWD);
+               TEST_SSID, TEST_PWD);
     }
     else
     {
         G_LOGE("UNEXPECTED EVENT");
     }
-    //TODO: do correctly
+    // TODO: do correctly
     return G_OK;
+}
+
+g_err gardener::wifiAdapter::startSTA(const char *SSID, const char *PWD)
+{
+    g_err erg = G_ERR_UNK;
+
+    _ap_netif = esp_netif_create_default_wifi_ap();
+    assert(_ap_netif);
+
+    esp_netif_ip_info_t ip_info;
+
+    /** NOTE: This is where you set the access point (AP) IP address
+        and gateway address. It has to be a class A internet address
+        otherwise the captive portal sign-in prompt won't show up	on
+        Android when you connect to the access point. */
+    IP4_ADDR(&ip_info.ip, 192, 168, 0, 10);
+    IP4_ADDR(&ip_info.gw, 192, 168, 0, 10);
+    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
+    esp_netif_dhcps_stop(_ap_netif);
+    esp_netif_set_ip_info(_ap_netif, &ip_info);
+    esp_netif_dhcps_start(_ap_netif);
+
+    if (!_wifiInitDone)
+    {
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        erg = g_err_translate(esp_wifi_init(&cfg));
+        if (erg != G_OK)
+            return erg;
+        _wifiInitDone = true;
+    }
+
+    memset(&(_config.ap), 0, sizeof(_config.ap));
+    memcpy(&(_config.ap.ssid), SSID, strlen(SSID));
+    _config.ap.ssid_len = strlen(SSID);
+    _config.ap.channel = 1;
+    memcpy(&(_config.ap.password), PWD, strlen(PWD));
+    _config.ap.max_connection = 4;
+    if (strlen(PWD) > 0)
+    {
+        _config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    }
+    else
+    {
+        _config.ap.authmode = WIFI_AUTH_OPEN;
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &_config));
+
+    G_LOGI("starting WiFi access point: SSID: %s password:%s channel: %d",
+           SSID, PWD, 1);
+
+    if (_wifiStarted)
+    {
+        esp_wifi_stop();
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_start());
+    _wifiStarted = true;
+    return erg;
+}
+
+esp_netif_t *gardener::wifiAdapter::getNetIFAP()
+{
+    return _ap_netif;
 }
 
 g_err wifiAdapter::_start()
@@ -76,10 +147,14 @@ g_err wifiAdapter::_start()
 
     _event_group = xEventGroupCreate();
 
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    erg = g_err_translate(esp_wifi_init(&cfg));
-    if (erg != G_OK)
-        return erg;
+    if (!_wifiInitDone)
+    {
+        wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+        erg = g_err_translate(esp_wifi_init(&cfg));
+        if (erg != G_OK)
+            return erg;
+        _wifiInitDone = true;
+    }
 
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
