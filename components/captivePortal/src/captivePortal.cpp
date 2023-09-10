@@ -69,22 +69,18 @@ captivePortal::~captivePortal()
 
 g_err captivePortal::start()
 {
-    g_err erg = G_OK;
-    erg = g_err_translate(xTaskCreate(_dns_task, (const char *)"dns_task", 4096, this, 3, NULL));
+    xTaskCreate(_dns_task, (const char *)"dns_task", 8192, this, 3, NULL);
 
-    // if (erg != G_OK)
-    //     return erg;
+    g_err erg = G_OK;
 
     /** HTTP server */
     G_LOGI("Starting HTTP Server...");
-
-    httpd_handle_t server = NULL;
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.lru_purge_enable = true;
 
-    erg = g_err_translate(httpd_start(&server, &config));
+    erg = g_err_translate(httpd_start(&_server, &config));
     if (erg != G_OK)
         return erg;
 
@@ -92,14 +88,9 @@ g_err captivePortal::start()
 
     G_LOGI("Registering HTTP server URI handlers...");
 
-    /** URI handler */
-    httpd_uri_t common_get_uri = {
-        .uri = "/*",
-        .method = HTTP_GET,
-        .handler = _commonHandler,
-        .user_ctx = this};
+    /** use 404 Handler for redirects URI handler */
 
-    httpd_register_uri_handler(server, &common_get_uri);
+    httpd_register_err_handler(_server, HTTPD_404_NOT_FOUND, _commonHandler);
 
     G_LOGI("Registered HTTP server URI handlers.");
 
@@ -110,9 +101,16 @@ void gardener::captivePortal::stop()
 {
 }
 
-g_err gardener::captivePortal::on(const char *path, void *cb)
+g_err gardener::captivePortal::on(const char *path, esp_err_t (*handler)(httpd_req_t *r))
 {
-    return g_err();
+    /** URI handler */
+    httpd_uri_t common_get_uri = {
+        .uri = "/*",
+        .method = HTTP_GET,
+        .handler = handler,
+        .user_ctx = this};
+
+    return g_err_translate(httpd_register_uri_handler(_server, &common_get_uri));
 }
 
 void gardener::captivePortal::_dns_task(void *args)
@@ -167,7 +165,7 @@ void gardener::captivePortal::_dns_task(void *args)
     vTaskDelete(NULL);
 }
 
-esp_err_t gardener::captivePortal::_commonHandler(httpd_req_t *req)
+esp_err_t gardener::captivePortal::_commonHandler(httpd_req_t *req, httpd_err_code_t error)
 {
     captivePortal *prtl = (captivePortal *)req->user_ctx;
     const char *_name = prtl->_name;
@@ -206,74 +204,23 @@ esp_err_t gardener::captivePortal::_commonHandler(httpd_req_t *req)
 
     G_LOGI("Got HOST header value: %s", req_hdr_host_val);
 
-    const char redir_trigger_host[] = "connectivitycheck.gstatic.com";
+    const char *correct_host = "gravi.plant";
 
-    if (strncmp(req_hdr_host_val, redir_trigger_host, strlen(redir_trigger_host)) == 0)
+    if (strncmp(req_hdr_host_val, correct_host, strlen(correct_host)) != 0)
     {
-        const char resp[] = "511 Network Authentication Required";
+        const char resp[] = "302 Temporary Redirect";
 
-        G_LOGI("Detected redirect trigger HOST: %s", redir_trigger_host);
+        G_LOGI("Detected redirect trigger HOST: %s", req_hdr_host_val);
 
         httpd_resp_set_status(req, resp);
-
-        /** NOTE: This is where you redirect to whatever DNS address you prefer to open the
-            captive portal page. This DNS address will be displayed at the top of the
-            page, so maybe you want to choose a nice name to use (it can be any legal
-            DNS name that you prefer. */
-        httpd_resp_set_hdr(req, "Content-Type", "text/html");
-
-        const char *page = R"EOF(<html>
-            <head>
-                <title>Network Authentication Required</title>
-                <meta http-equiv="refresh"
-                    content="0; url=http://login.example.net/">
-            </head>
-            <body>
-                <p>You need to <a href="http://login.example.net/">
-                authenticate with the local network</a> in order to gain
-                access.</p>
-            </body>
-        </html>)EOF";
-
-        httpd_resp_send(req, page, HTTPD_RESP_USE_STRLEN);
+        httpd_resp_set_hdr(req, "Location", "http://gravi.plant/config");
+        httpd_resp_send(req, "Redirect to captive Portal", HTTPD_RESP_USE_STRLEN);
     }
     else
     {
         G_LOGI("No redirect needed for HOST: %s", req_hdr_host_val);
 
-        // /*	Read URL query string length and allocate memory for length + 1,
-        //     extra byte for null termination */
-        // buf_len = httpd_req_get_url_query_len(req) + 1;
-        // if (buf_len > 1)
-        // {
-        //     buf = malloc(buf_len);
-        //     if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK)
-        //     {
-        //         ESP_LOGI(HTTPD_TAG, "Found URL query => %s", buf);
-        //         char param[32];
-        //         /* Get value of expected key from query string */
-        //         if (httpd_query_key_value(buf, "query1", param, sizeof(param)) == ESP_OK)
-        //         {
-        //             ESP_LOGI(HTTPD_TAG, "Found URL query parameter => query1=%s", param);
-        //         }
-        //         if (httpd_query_key_value(buf, "query3", param, sizeof(param)) == ESP_OK)
-        //         {
-        //             ESP_LOGI(HTTPD_TAG, "Found URL query parameter => query3=%s", param);
-        //         }
-        //         if (httpd_query_key_value(buf, "query2", param, sizeof(param)) == ESP_OK)
-        //         {
-        //             ESP_LOGI(HTTPD_TAG, "Found URL query parameter => query2=%s", param);
-        //         }
-        //     }
-        //     free(buf);
-        // }
-
-        // /* Set some custom headers */
-        // httpd_resp_set_hdr(req, "Custom-Header-1", "Custom-Value-1");
-        // httpd_resp_set_hdr(req, "Custom-Header-2", "Custom-Value-2");
-
-        /*	Send response with custom headers and body set as the
-            string passed in user context */
+        
         const char *resp_str = "Hello World";
         httpd_resp_send(req, resp_str, strlen(resp_str));
     }
