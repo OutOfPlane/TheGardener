@@ -103,6 +103,8 @@ g_err gardener::httpClient::getPrintf(char *responseBuffer, uint16_t responseBuf
     uint8_t paramStart = 0;
     while (*tmpPtr)
     {
+        if(*tmpPtr == 0x1B)
+            break;
         *tmpENCPtr = *tmpPtr;
         if (paramStart)
         {
