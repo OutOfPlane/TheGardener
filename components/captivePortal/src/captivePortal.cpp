@@ -89,7 +89,6 @@ g_err captivePortal::start()
     G_LOGI("Registering HTTP server URI handlers...");
 
     /** use 404 Handler for redirects URI handler */
-
     httpd_register_err_handler(_server, HTTPD_404_NOT_FOUND, _commonHandler);
 
     G_LOGI("Registered HTTP server URI handlers.");
@@ -105,7 +104,7 @@ g_err gardener::captivePortal::on(const char *path, esp_err_t (*handler)(httpd_r
 {
     /** URI handler */
     httpd_uri_t common_get_uri = {
-        .uri = "/*",
+        .uri = path,
         .method = HTTP_GET,
         .handler = handler,
         .user_ctx = this};
@@ -167,8 +166,8 @@ void gardener::captivePortal::_dns_task(void *args)
 
 esp_err_t gardener::captivePortal::_commonHandler(httpd_req_t *req, httpd_err_code_t error)
 {
-    captivePortal *prtl = (captivePortal *)req->user_ctx;
-    const char *_name = prtl->_name;
+    // captivePortal *prtl = (captivePortal *)req->user_ctx;
+    const char *_name = "404 Handler";
 
     size_t req_hdr_host_len = httpd_req_get_hdr_value_len(req, "Host");
 
