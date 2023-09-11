@@ -18,6 +18,7 @@ namespace gardener
         g_err setVoltage(int32_t voltage_mV);
 
     private:
+        uint8_t _this_ledc_channel;
         static uint8_t _ledc_channel;
         static uint8_t _ledc_timer_config_done;
     };

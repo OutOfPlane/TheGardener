@@ -91,7 +91,11 @@ g_err esp32ioPin::mode(pinDirection dir)
             .hpoint = 0,
             .flags = {0}};
         if ((erg = g_err_translate(ledc_channel_config(&ledc_channel))) == G_OK)
+        {
+            _this_ledc_channel = _ledc_channel;
             _ledc_channel++;
+        }
+
         return erg;
     }
 
@@ -132,11 +136,12 @@ bool esp32ioPin::canGet()
 
 g_err esp32ioPin::setVoltage(int32_t voltage_mV)
 {
+    G_LOGI("Set voltage to %d mV", voltage_mV);
     int32_t val = (voltage_mV * 1023) / 3300;
     if (val < 0)
         val = 0;
     if (val > 1023)
         val = 1023;
-    ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0, val);
-    return g_err_translate(ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0));
+    ledc_set_duty(LEDC_HIGH_SPEED_MODE, (ledc_channel_t)_this_ledc_channel, val);
+    return g_err_translate(ledc_update_duty(LEDC_HIGH_SPEED_MODE, (ledc_channel_t)_this_ledc_channel));
 }
