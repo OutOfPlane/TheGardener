@@ -21,8 +21,10 @@
 using namespace gardener;
 
 void main_task(void *pvParameter);
+void updateSensorData();
 
 esp_err_t configPageHandler(httpd_req_t *req);
+esp_err_t dataRequestHandler(httpd_req_t *req);
 
 httpClient errClient("EHTTP");
 int webLogHandler(const char *pattern, va_list lst)
@@ -52,6 +54,7 @@ extern "C" void app_main()
 }
 
 wifiAdapter adaptWiFi("WiFi", 10);
+char sensorDataBuff[1024];
 
 void main_task(void *pvParameter)
 {
@@ -180,6 +183,7 @@ void main_task(void *pvParameter)
     prtl.start();
 
     prtl.on("/config", configPageHandler);
+    prtl.on("/data", dataRequestHandler);
 
     esp_log_set_vprintf(webLogHandler);
 
@@ -217,8 +221,35 @@ void main_task(void *pvParameter)
         // myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/water/?sn=%s", global::systemInfo.hardware.hardwareID);
         // printf("%s\r\n", outBuf);
 
-        // myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s", global::systemInfo.hardware.hardwareID);
-        // printf("%s\r\n", outBuf);
+        int32_t gn,rd,bl,wh;
+        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s", global::systemInfo.hardware.hardwareID);
+        printf("%s\r\n", outBuf);
+        if(sscanf(outBuf, "%d %d %d %d", &rd, &gn, &bl, &wh) != 4)
+        {
+            G_LOGE("Invalid light format: %s", outBuf);
+        }else{
+            if(global::LED_RD->lock(*global::LED_RD, 100))
+            {
+                global::LED_RD->setVoltage(rd*33);
+                global::LED_RD->unlock();
+            }
+            if(global::LED_GN->lock(*global::LED_GN, 100))
+            {
+                global::LED_GN->setVoltage(gn*33);
+                global::LED_GN->unlock();
+            }
+            if(global::LED_BL->lock(*global::LED_BL, 100))
+            {
+                global::LED_BL->setVoltage(bl*33);
+                global::LED_BL->unlock();
+            }
+            if(global::LED_WH->lock(*global::LED_WH, 100))
+            {
+                global::LED_WH->setVoltage(wh*33);
+                global::LED_WH->unlock();
+            }
+            
+        }
 
         vTaskDelay(1000 / portTICK_RATE_MS);
 
@@ -246,6 +277,139 @@ void main_task(void *pvParameter)
         // global::senseVIN->getVoltage(val_mV);
         // G_LOGI("VIN: %d mV", val_mV);
     }
+}
+
+void updateSensorData()
+{
+    char tmpSSID[32];
+    adaptWiFi.getSSID(tmpSSID);
+
+    int32_t vin, v3v3, v12va, ain0, ain1, ain2, ain3, iaux1, iaux2, imot, ird, ign, ibl, iwh;
+
+    if (global::senseVIN->lock(*global::senseVIN, 100))
+    {
+        global::senseVIN->getVoltage(vin);
+        global::senseVIN->unlock();
+    }
+
+    if (global::sense3V3->lock(*global::sense3V3, 100))
+    {
+        global::sense3V3->getVoltage(v3v3);
+        global::sense3V3->unlock();
+    }
+
+    if (global::sense12VA->lock(*global::sense12VA, 100))
+    {
+        global::sense12VA->getVoltage(v12va);
+        global::sense12VA->unlock();
+    }
+
+    if (global::iSense_AUX1->lock(*global::iSense_AUX1, 100))
+    {
+        global::iSense_AUX1->getVoltage(iaux1);
+        global::iSense_AUX1->unlock();
+        iaux1 = iaux1 * 606/1000;
+    }
+
+    if (global::iSense_AUX2->lock(*global::iSense_AUX2, 100))
+    {
+        global::iSense_AUX2->getVoltage(iaux2);
+        global::iSense_AUX2->unlock();
+        iaux2 = iaux2 * 606/1000;
+    }
+
+    if (global::iSense_MOT->lock(*global::iSense_MOT, 100))
+    {
+        global::iSense_MOT->getVoltage(imot);
+        global::iSense_MOT->unlock();
+        imot = imot * 606/1000;
+    }
+
+    if (global::iSense_LED_RD->lock(*global::iSense_LED_RD, 100))
+    {
+        global::iSense_LED_RD->getVoltage(ird);
+        global::iSense_LED_RD->unlock();
+        ird = ird * 606/1000;
+    }
+
+    if (global::iSense_LED_GN->lock(*global::iSense_LED_GN, 100))
+    {
+        global::iSense_LED_GN->getVoltage(ign);
+        global::iSense_LED_GN->unlock();
+        ign = ign * 606/1000;
+    }
+
+    if (global::iSense_LED_BL->lock(*global::iSense_LED_BL, 100))
+    {
+        global::iSense_LED_BL->getVoltage(ibl);
+        global::iSense_LED_BL->unlock();
+        ibl = ibl * 606/1000;
+    }
+
+    if (global::iSense_LED_WH->lock(*global::iSense_LED_WH, 100))
+    {
+        global::iSense_LED_WH->getVoltage(iwh);
+        global::iSense_LED_WH->unlock();
+        iwh = iwh * 606/1000;
+    }
+
+    if (global::AIN0->lock(*global::AIN0, 100))
+    {
+        global::AIN0->getVoltage(ain0);
+        global::AIN0->unlock();
+    }
+    if (global::AIN1->lock(*global::AIN1, 100))
+    {
+        global::AIN1->getVoltage(ain1);
+        global::AIN1->unlock();
+    }
+    if (global::AIN2->lock(*global::AIN2, 100))
+    {
+        global::AIN2->getVoltage(ain2);
+        global::AIN2->unlock();
+    }
+    if (global::AIN3->lock(*global::AIN3, 100))
+    {
+        global::AIN3->getVoltage(ain3);
+        global::AIN3->unlock();
+    }
+
+    sprintf(sensorDataBuff, R"EOF({
+"hwID":"%s",
+"wifi_ssid":"%s",
+"wifi_stat":"%s",
+"AIN0_mV":%d,
+"AIN1_mV":%d,
+"AIN2_mV":%d,
+"AIN3_mV":%d,
+"vin_mV":%d,
+"v3v3_mV":%d,
+"v12va_mV":%d,
+"iaux1_mA":%d,
+"iaux2_mA":%d,
+"imot_mA":%d,
+"ird_mA":%d,
+"ign_mA":%d,
+"ibl_mA":%d,
+"iwh_mA":%d
+})EOF",
+            global::systemInfo.hardware.hardwareID,
+            tmpSSID,
+            adaptWiFi.getStateName(),
+            ain0,
+            ain1,
+            ain2,
+            ain3,
+            vin,
+            v3v3,
+            v12va,
+            iaux1,
+            iaux2,
+            imot,
+            ird,
+            ign,
+            ibl,
+            iwh);
 }
 
 char pageBuff[1024];
@@ -280,6 +444,21 @@ esp_err_t configPageHandler(httpd_req_t *req)
     httpd_resp_send_chunk(req, "</div>", HTTPD_RESP_USE_STRLEN);
 
     httpd_resp_send_chunk(req, webpageFooter, HTTPD_RESP_USE_STRLEN);
+
+    httpd_resp_send_chunk(req, nullptr, 0);
+
+    return ESP_OK;
+}
+
+esp_err_t dataRequestHandler(httpd_req_t *req)
+{
+    captivePortal *prtl = (captivePortal *)req->user_ctx;
+    const char *_name = prtl->getName();
+
+    httpd_resp_set_hdr(req, "Content-Type", "application/json");
+    updateSensorData();
+
+    httpd_resp_send_chunk(req, sensorDataBuff, HTTPD_RESP_USE_STRLEN);
 
     httpd_resp_send_chunk(req, nullptr, 0);
 

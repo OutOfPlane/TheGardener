@@ -2,13 +2,13 @@
 #define WEBPAGE_H
 
 const char *webpageHeader1 = R"EOF(
-<!DOCTYPE html><html>
+<!DOCTYPE html><html lang="en-US">
 <head><title>
 )EOF";
 
 const char *webpageHeader2 = R"EOF(
 </title>
-<meta name=viewport content=\"width=device-width,initial-scale=1\">
+<meta name=viewport content="width=device-width,initial-scale=1">
 <style>
 article { background: #f2f2f2; padding: 1.3em; }
 body { color: #333; font-family: Century Gothic, sans-serif; font-size: 18px; line-height: 24px; margin: 0; padding: 0; }
@@ -20,7 +20,23 @@ nav { background: #0066ff; color: #fff; display: block; font-size: 1.3em; paddin
 nav b { display: block; font-size: 1.5em; margin-bottom: 0.5em; } 
 textarea { width: 100%; }
 </style>
-<meta charset=\"UTF-8\">
+<script>
+var getJSON = function(url, callback) {
+var xhr = new XMLHttpRequest();
+xhr.open('GET', url, true);
+xhr.responseType = 'json';
+xhr.onload = function() {
+var status = xhr.status;
+if (status === 200) {
+callback(null, xhr.response);
+} else {
+callback(status, xhr.response);
+}
+};
+xhr.send();
+};
+</script>
+<meta charset="UTF-8">
 </head>
 <body>
 )EOF";
