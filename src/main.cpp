@@ -91,8 +91,8 @@ void main_task(void *pvParameter)
     global::AUX1 = myPortExpander.getIOPin(3);
     global::AUX2 = myPortExpander.getIOPin(4);
 
-    global::LED_RD = new esp32ioPin("LED_RD", 14);
-    global::LED_GN = new esp32ioPin("LED_GN", 13);
+    global::LED_RD = new esp32ioPin("LED_RD", 13);
+    global::LED_GN = new esp32ioPin("LED_GN", 14);
     global::LED_BL = new esp32ioPin("LED_BL", 16);
     global::LED_WH = new esp32ioPin("LED_WH", 17);
 
@@ -222,11 +222,15 @@ void main_task(void *pvParameter)
         // printf("%s\r\n", outBuf);
 
         int32_t gn,rd,bl,wh;
-        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s", global::systemInfo.hardware.hardwareID);
-        printf("%s\r\n", outBuf);
+        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID);
         if(sscanf(outBuf, "%d %d %d %d", &rd, &gn, &bl, &wh) != 4)
         {
-            G_LOGE("Invalid light format: %s", outBuf);
+            if(sscanf(outBuf, "%d", &rd) == 1)
+            {
+                G_LOGI("No LIGHT pending");
+            }else{
+                G_LOGE("Invalid light format: %s", outBuf);
+            }            
         }else{
             if(global::LED_RD->lock(*global::LED_RD, 100))
             {
@@ -251,7 +255,7 @@ void main_task(void *pvParameter)
             
         }
 
-        vTaskDelay(1000 / portTICK_RATE_MS);
+        vTaskDelay(10000 / portTICK_RATE_MS);
 
         // G_ERROR_DECODE(G_ERR_NO_IMPLEMENTATION);
 
