@@ -19,6 +19,7 @@ label { color: #333; display: block; font-style: italic; font-weight: bold; }
 nav { background: #0066ff; color: #fff; display: block; font-size: 1.3em; padding: 1em; }
 nav b { display: block; font-size: 1.5em; margin-bottom: 0.5em; } 
 textarea { width: 100%; }
+td {text-align: right;}
 </style>
 <script>
 var getJSON = function(url, callback) {
@@ -41,11 +42,141 @@ xhr.send();
 <body>
 )EOF";
 
+const char *webpageDataTable = R"EOF(
+<table>
+<tr>
+<th>ITEM</th>
+<th>VALUE</th>
+<th>SENSOR</th>
+</tr>
+<tr>
+<td>WiFi</td>
+<td id="wifissid">-</td>
+<td id="wifistat">-</td>
+</tr>
+<tr>
+<td>VIN</td>
+<td></td>
+<td id="vin_mV">-</td>
+</tr>
+<tr>
+<td>3V3 AN</td>
+<td></td>
+<td id="v3v3_mV">-</td>
+</tr>
+<tr>
+<tr>
+<td>12V AN</td>
+<td></td>
+<td id="v12va_mV">-</td>
+</tr>
+<tr>
+<td>IO1</td>
+<td id="OUT1_v">-</td>
+<td id="IN1_v">-</td>
+</tr>
+<tr>
+<td>IO2</td>
+<td id="OUT2_v">-</td>
+<td id="IN2_v">-</td>
+</tr>
+<tr>
+<td>AIN0</td>
+<td></td>
+<td id="AIN0_mV">-</td>
+</tr>
+<tr>
+<td>AIN1</td>
+<td></td>
+<td id="AIN1_mV">-</td>
+</tr>
+<tr>
+<td>AIN2</td>
+<td></td>
+<td id="AIN2_mV">-</td>
+</tr>
+<tr>
+<td>AIN3</td>
+<td></td>
+<td id="AIN3_mV">-</td>
+</tr>
+<tr>
+<td>AOUT</td>
+<td id="AOUT_mV">-</td>
+<td></td>
+</tr>
+<tr>
+<td>AUX1</td>
+<td id="AUX1_s">-</td>
+<td id="iaux1_mA">-</td>
+</tr>
+<tr>
+<td>AUX2</td>
+<td id="AUX2_s">-</td>
+<td id="iaux2_mA">-</td>
+</tr>
+<tr>
+<td>MOTOR</td>
+<td>OFF</td>
+<td id="imot_mA">-</td>
+</tr>
+<tr>
+<td>LED RD</td>
+<td id="rd_p">-</td>
+<td id="ird_mA">-</td>
+</tr>
+<tr>
+<td>LED GN</td>
+<td id="gn_p">-</td>
+<td id="ign_mA">-</td>
+</tr>
+<tr>
+<td>LED BL</td>
+<td id="bl_p">-</td>
+<td id="ibl_mA">-</td>
+</tr>
+<tr>
+<td>LED WH</td>
+<td id="wh_p">-</td>
+<td id="iwh_mA">-</td>
+</tr>
+</table>
+)EOF";
+
+const char *webpageTableUpdateScript = R"EOF(
+<script>
+function retrieveData() {
+getJSON("/data", function(err, data) {
+if(err != null){
+console.log(err)
+}else{
+for (var key in data) {
+if (data.hasOwnProperty(key)) {
+if(document.getElementById(key) != null){
+document.getElementById(key).innerHTML = data[key];
+if(key.includes("_mA"))
+document.getElementById(key).innerHTML = (data[key]/1000.0).toFixed(3) + " A";
+if(key.includes("_mV"))
+document.getElementById(key).innerHTML = (data[key]/1000.0).toFixed(3) + " V";
+if(key.includes("_p"))
+document.getElementById(key).innerHTML = data[key] + " %";
+if(key.includes("_s"))
+document.getElementById(key).innerHTML = ["OFF", "ON"][data[key]];
+if(key.includes("_v"))
+document.getElementById(key).innerHTML = ["LOW", "HIGH"][data[key]];
+}
+}
+}
+}
+});
+}
+var interval = setInterval(retrieveData, 1000);
+</script>
+)EOF";
+
 const char *webpageFooter = R"EOF(
 </body>
 </html>
 )EOF";
-
-
 
 #endif
