@@ -24,6 +24,7 @@ esp32ioPin::~esp32ioPin()
 
 g_err esp32ioPin::mode(pinDirection dir)
 {
+    _dir = dir;
     switch (dir)
     {
     case PIN_OUTPUT:
@@ -110,17 +111,37 @@ g_err esp32ioPin::mode(pinDirection dir)
 
 g_err esp32ioPin::set(uint8_t value)
 {
+    _level = value;
     return g_err_translate(gpio_set_level((gpio_num_t)_pinNumber, value));
 }
 
 g_err esp32ioPin::get(uint8_t &value)
 {
-    int erg = gpio_get_level((gpio_num_t)_pinNumber);
-    if ((erg == 0) || (erg == 1))
+    if(_dir == PIN_INPUT)
     {
+        int erg = gpio_get_level((gpio_num_t)_pinNumber);
+        if ((erg == 0) || (erg == 1))
+        {
+            value = erg;
+            return G_OK;
+        }
+        return G_ERR_HARDWARE;
+    }
+    if(_dir == PIN_OUTPUT)
+    {
+        value = _level;
         return G_OK;
     }
-    return G_ERR_HARDWARE;
+    if(_dir == PIN_OUTPUT_PWM)
+    {
+        value = 0;
+        if(_level > 0)
+        {
+            value = 1;
+        }
+        return G_OK;
+    }
+    return G_ERR_INVALID_STATE;
 }
 
 // TODO: respect input only pins here
@@ -136,6 +157,7 @@ bool esp32ioPin::canGet()
 
 g_err esp32ioPin::setVoltage(int32_t voltage_mV)
 {
+    _level = voltage_mV;
     G_LOGI("Set voltage to %d mV", voltage_mV);
     int32_t val = (voltage_mV * 1023) / 3300;
     if (val < 0)
@@ -144,4 +166,24 @@ g_err esp32ioPin::setVoltage(int32_t voltage_mV)
         val = 1023;
     ledc_set_duty(LEDC_HIGH_SPEED_MODE, (ledc_channel_t)_this_ledc_channel, val);
     return g_err_translate(ledc_update_duty(LEDC_HIGH_SPEED_MODE, (ledc_channel_t)_this_ledc_channel));
+}
+
+g_err gardener::esp32ioPin::getVoltage(int32_t &voltage_mV)
+{
+    if(_dir == PIN_OUTPUT_PWM)
+    {
+        voltage_mV = _level;
+        return G_OK;
+    }
+    if(_dir == PIN_OUTPUT)
+    {
+        voltage_mV = 0;
+        if(_level > 0)
+        {
+            voltage_mV = 3300;
+        }
+        return G_OK;
+    }
+    //TODO: add case input
+    return G_ERR_INVALID_STATE;
 }
