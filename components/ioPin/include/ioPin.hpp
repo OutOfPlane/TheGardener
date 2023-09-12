@@ -7,6 +7,7 @@ namespace gardener
 {
     enum pinDirection
     {
+        PIN_UNSET,
         PIN_INPUT,
         PIN_INPUT_PULLUP,
         PIN_INPUT_PULLDOWN,
