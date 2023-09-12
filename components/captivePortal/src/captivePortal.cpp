@@ -213,6 +213,7 @@ esp_err_t gardener::captivePortal::_commonHandler(httpd_req_t *req, httpd_err_co
 
         httpd_resp_set_status(req, resp);
         httpd_resp_set_hdr(req, "Location", "http://gravi.plant/config");
+        httpd_resp_set_hdr(req, "Connection", "close");
         httpd_resp_send(req, "Redirect to captive Portal", HTTPD_RESP_USE_STRLEN);
     }
     else
