@@ -5,6 +5,7 @@
 #include <portExpander.hpp>
 #include <systemInfo.hpp>
 #include <networkAdapter.hpp>
+#include <humidityTemperatureSensor.hpp>
 
 namespace gardener
 {
@@ -32,6 +33,8 @@ namespace gardener
         extern ioPin *LED_STAT_RDY;
         extern ioPin *LED_STAT_STA;
         extern ioPin *LED_STAT_ERR;
+        extern ioPin *MOT_FWD;
+        extern ioPin *MOT_REV;
 
         //internal PINS
         extern ioPin *sense12VA;
@@ -55,6 +58,7 @@ namespace gardener
 
         //I2C-Ports
         extern i2cPort *systemBus;
+        extern humidityTemperatureSensor *environmental;
 
         //Protocols/Drivers
         extern networkAdapter *connectivity;

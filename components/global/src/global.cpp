@@ -24,6 +24,9 @@ ioPin *global::LED_WH;
 ioPin *global::LED_STAT_RDY;
 ioPin *global::LED_STAT_STA;
 ioPin *global::LED_STAT_ERR;
+
+ioPin *global::MOT_FWD;
+ioPin *global::MOT_REV;
 // I2C-Ports
 i2cPort *global::systemBus;
 
@@ -45,6 +48,8 @@ ioPin *global::iSense_LED_WH;
 ioPin *global::iSense_MOT;
 ioPin *global::iSense_AUX1;
 ioPin *global::iSense_AUX2;
+
+humidityTemperatureSensor *global::environmental;
 
 // Protocols/Drivers
 networkAdapter *global::connectivity;
