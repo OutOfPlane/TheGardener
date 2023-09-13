@@ -55,6 +55,16 @@ const char *webpageDataTable = R"EOF(
 <td id="wifistat">-</td>
 </tr>
 <tr>
+<td>Temperature</td>
+<td></td>
+<td id="temp_d">-</td>
+</tr>
+<tr>
+<td>Humidity</td>
+<td></td>
+<td id="hum_r">-</td>
+</tr>
+<tr>
 <td>VIN</td>
 <td></td>
 <td id="vin_mV">-</td>
@@ -117,7 +127,7 @@ const char *webpageDataTable = R"EOF(
 </tr>
 <tr>
 <td>MOTOR</td>
-<td>OFF</td>
+<td id="mot_p">-</td>
 <td id="imot_mA">-</td>
 </tr>
 <tr>
@@ -164,6 +174,10 @@ if(key.includes("_s"))
 document.getElementById(key).innerHTML = ["OFF", "ON"][data[key]];
 if(key.includes("_v"))
 document.getElementById(key).innerHTML = ["LOW", "HIGH"][data[key]];
+if(key.includes("_d"))
+document.getElementById(key).innerHTML = (data[key]/10.0).toFixed(1) + " °C";
+if(key.includes("_r"))
+document.getElementById(key).innerHTML = (data[key]/10.0).toFixed(1) + " %rH";
 }
 }
 }

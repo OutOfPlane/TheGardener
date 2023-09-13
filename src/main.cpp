@@ -15,6 +15,8 @@
 #include <httpClient.hpp>
 #include <wifiAdapter.hpp>
 #include <captivePortal.hpp>
+#include <timeout.hpp>
+#include <sht40.hpp>
 
 #include "webpage.h"
 
@@ -97,6 +99,9 @@ void main_task(void *pvParameter)
     global::LED_BL = new esp32ioPin("LED_BL", 16);
     global::LED_WH = new esp32ioPin("LED_WH", 17);
 
+    global::MOT_FWD = new esp32ioPin("M_FWD", 25);
+    global::MOT_REV = new esp32ioPin("M_REV", 26);
+
     global::senseVIN = new adcPin("VIN_sense", 2, &myADC, 10);
     global::sense12VA = new adcPin("12VA_sense", 6, &myADC, 10);
     global::sense3V3 = new adcPin("3V3_sense", 3, &myADC, 2);
@@ -120,6 +125,8 @@ void main_task(void *pvParameter)
     global::LED_STAT_RDY = myPortExpander.getIOPin(7);
     global::LED_STAT_STA = myPortExpander.getIOPin(6);
     global::LED_STAT_ERR = myPortExpander.getIOPin(5);
+
+    global::environmental = new SHT40("SHT40", global::systemBus);
     //------END-IO-Hardware----------------
 
     //------BEGIN-Automatic System Configuration--------------
@@ -157,6 +164,8 @@ void main_task(void *pvParameter)
     global::LED_BL->mode(PIN_OUTPUT_PWM);
     global::LED_WH->mode(PIN_OUTPUT_PWM);
     global::AOUT->mode(PIN_OUTPUT_PWM);
+    global::MOT_FWD->mode(PIN_OUTPUT_PWM);
+    global::MOT_REV->mode(PIN_OUTPUT_PWM);
 
     global::AUX1->set(1);
     global::AUX2->set(0);
@@ -186,84 +195,137 @@ void main_task(void *pvParameter)
 
     prtl.start();
 
-    prtl.on("/config", configPageHandler);
+    prtl.on("/status", configPageHandler);
     prtl.on("/data", dataRequestHandler);
 
     esp_log_set_vprintf(webLogHandler);
 
+    timeout waterTimeout(0, SECONDS);
+    timeout requestTimeout(10, SECONDS);
+
     while (1)
     {
-        int32_t gn, rd, bl, wh;
-        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID);
-        if (sscanf(outBuf, "%d %d %d %d", &rd, &gn, &bl, &wh) != 4)
+        if (requestTimeout.isEllapsed())
         {
-            if (sscanf(outBuf, "%d", &rd) == 1)
-            {
-                G_LOGI("No LIGHT pending");
-            }
-            else
-            {
-                G_LOGE("Invalid light format: %s", outBuf);
-            }
-        }
-        else
-        {
-            if (global::LED_RD->lock(*global::LED_RD, 100))
-            {
-                global::LED_RD->setVoltage(rd * 33);
-                global::LED_RD->unlock();
-            }
-            if (global::LED_GN->lock(*global::LED_GN, 100))
-            {
-                global::LED_GN->setVoltage(gn * 33);
-                global::LED_GN->unlock();
-            }
-            if (global::LED_BL->lock(*global::LED_BL, 100))
-            {
-                global::LED_BL->setVoltage(bl * 33);
-                global::LED_BL->unlock();
-            }
-            if (global::LED_WH->lock(*global::LED_WH, 100))
-            {
-                global::LED_WH->setVoltage(wh * 33);
-                global::LED_WH->unlock();
-            }
-        }
+            requestTimeout.reset();
 
-        char waterCMD;
-        int32_t val;
-        myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/water/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID);
-        if (sscanf(outBuf, "%c %d", &waterCMD, &val) != 2)
-        {
-            if (sscanf(outBuf, "%d", &val) == 1)
+            int32_t gn, rd, bl, wh;
+            myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID);
+            if (sscanf(outBuf, "%d %d %d %d", &rd, &gn, &bl, &wh) != 4)
             {
-                G_LOGI("No WATER pending");
-            }
-            else
-            {
-                G_LOGE("Invalid water format: %s", outBuf);
-            }
-        }
-        else
-        {
-            if (waterCMD == 'a')
-            {
-                if (global::AOUT->lock(*global::AOUT, 100))
+                if (sscanf(outBuf, "%d", &rd) == 1)
                 {
-                    global::AOUT->setVoltage((val * 33) / 100);
-                    global::AOUT->unlock();
+                    G_LOGI("No LIGHT pending");
+                }
+                else
+                {
+                    G_LOGE("Invalid light format: %s", outBuf);
                 }
             }
-            else if (waterCMD == 'm')
+            else
             {
+                if (global::LED_RD->lock(*global::LED_RD, 100))
+                {
+                    global::LED_RD->setVoltage(rd * 33);
+                    global::LED_RD->unlock();
+                }
+                if (global::LED_GN->lock(*global::LED_GN, 100))
+                {
+                    global::LED_GN->setVoltage(gn * 33);
+                    global::LED_GN->unlock();
+                }
+                if (global::LED_BL->lock(*global::LED_BL, 100))
+                {
+                    global::LED_BL->setVoltage(bl * 33);
+                    global::LED_BL->unlock();
+                }
+                if (global::LED_WH->lock(*global::LED_WH, 100))
+                {
+                    global::LED_WH->setVoltage(wh * 33);
+                    global::LED_WH->unlock();
+                }
+            }
+
+            char waterCMD;
+            int32_t val;
+            myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/water/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID);
+            if (sscanf(outBuf, "%c %d", &waterCMD, &val) != 2)
+            {
+                if (sscanf(outBuf, "%d", &val) == 1)
+                {
+                    G_LOGI("No WATER pending");
+                }
+                else
+                {
+                    G_LOGE("Invalid water format: %s", outBuf);
+                }
             }
             else
             {
-                G_LOGE("Invalid water command: %s", outBuf);
+                if (waterCMD == 'a')
+                {
+                    if (global::AOUT->lock(*global::AOUT, 100))
+                    {
+                        global::AOUT->setVoltage((val * 33) / 100);
+                        global::AOUT->unlock();
+                    }
+                }
+                else if (waterCMD == 'm')
+                {
+                    if (val > 0)
+                    {
+                        if (global::MOT_REV->lock(*global::MOT_REV, 100))
+                        {
+                            global::MOT_REV->setVoltage(3300);
+                            global::MOT_REV->unlock();
+                        }
+                        if (global::MOT_FWD->lock(*global::MOT_FWD, 100))
+                        {
+                            global::MOT_FWD->setVoltage(3300 - (val * 33));
+                            global::MOT_FWD->unlock();
+                        }
+                    }
+                    else
+                    {
+                        if (global::MOT_FWD->lock(*global::MOT_FWD, 100))
+                        {
+                            global::MOT_FWD->setVoltage(3300);
+                            global::MOT_FWD->unlock();
+                        }
+                        if (global::MOT_REV->lock(*global::MOT_REV, 100))
+                        {
+                            global::MOT_REV->setVoltage(3300 - (-val * 33));
+                            global::MOT_REV->unlock();
+                        }
+                    }
+                }
+                else if (waterCMD == 'w')
+                {
+                    if (global::AUX2->lock(*global::AUX2, 100))
+                    {
+                        global::AUX2->set(1);
+                        global::AUX2->unlock();
+                    }
+                    waterTimeout.setPeriod(val, SECONDS);
+                    waterTimeout.reset();
+                }
+                else
+                {
+                    G_LOGE("Invalid water command: %s", outBuf);
+                }
             }
         }
 
-        vTaskDelay(10000 / portTICK_RATE_MS);
+        if (waterTimeout.isEllapsed())
+        {
+            if (global::AUX2->lock(*global::AUX2, 100))
+            {
+                global::AUX2->set(0);
+                global::AUX2->unlock();
+            }
+        }
+
+        vTaskDelay(100 / portTICK_RATE_MS);
     }
 }
 
@@ -274,7 +336,7 @@ void updateSensorData()
 
     int32_t vin, v3v3, v12va, ain0, ain1, ain2, ain3,
         iaux1, iaux2, imot, ird, ign, ibl, iwh,
-        vrd, vgn, vbl, vwh, aout;
+        vrd, vgn, vbl, vwh, aout, mfwd, mrev, temper, humi;
 
     uint8_t sin1, sin2, sout1, sout2, saux1, saux2;
 
@@ -429,6 +491,25 @@ void updateSensorData()
         global::AOUT->unlock();
     }
 
+    if (global::MOT_FWD->lock(*global::MOT_FWD, 100))
+    {
+        global::MOT_FWD->getVoltage(mfwd);
+        global::MOT_FWD->unlock();
+    }
+
+    if (global::MOT_REV->lock(*global::MOT_REV, 100))
+    {
+        global::MOT_REV->getVoltage(mrev);
+        global::MOT_REV->unlock();
+    }
+
+    if (global::environmental->lock(*global::environmental, 100))
+    {
+        global::environmental->getHumidity(humi);
+        global::environmental->getTemperature(temper);
+        global::environmental->unlock();
+    }
+
     sprintf(sensorDataBuff, R"EOF({
 "hwID":"%s",
 "wifissid":"%s",
@@ -457,7 +538,10 @@ void updateSensorData()
 "IN2_v":%d,
 "AUX1_s":%d,
 "AUX2_s":%d,
-"AOUT_mV":%d
+"AOUT_mV":%d,
+"mot_p":%d,
+"temp_d":%d,
+"hum_r":%d
 })EOF",
             global::systemInfo.hardware.hardwareID,
             tmpSSID,
@@ -486,7 +570,10 @@ void updateSensorData()
             sin2,
             saux1,
             saux2,
-            (aout * 100 / 33));
+            (aout * 100 / 33),
+            (mrev - mfwd) / 33,
+            temper,
+            humi);
 }
 
 char pageBuff[1024];
@@ -510,14 +597,6 @@ esp_err_t configPageHandler(httpd_req_t *req)
     <div>
     <h1>Status</h1>)EOF",
             global::systemInfo.hardware.hardwareID);
-    httpd_resp_send_chunk(req, pageBuff, HTTPD_RESP_USE_STRLEN);
-
-    char tmpSSID[32];
-    adaptWiFi.getSSID(tmpSSID);
-
-    sprintf(pageBuff, R"EOF(
-    Wifi: %s - <strong>%s</strong>)EOF",
-            tmpSSID, adaptWiFi.getStateName());
     httpd_resp_send_chunk(req, pageBuff, HTTPD_RESP_USE_STRLEN);
 
     httpd_resp_send_chunk(req, webpageDataTable, HTTPD_RESP_USE_STRLEN);
