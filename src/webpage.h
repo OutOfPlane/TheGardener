@@ -46,8 +46,13 @@ const char *webpageDataTable = R"EOF(
 <table>
 <tr>
 <th>ITEM</th>
-<th>VALUE</th>
-<th>SENSOR</th>
+<th>SETPOINT</th>
+<th>FEEDBACK</th>
+</tr>
+<tr>
+<td>Firmware</td>
+<td id="fwvers">-</td>
+<td id="fwfeat">-</td>
 </tr>
 <tr>
 <td>WiFi</td>

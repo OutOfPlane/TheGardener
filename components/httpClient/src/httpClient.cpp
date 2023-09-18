@@ -57,6 +57,7 @@ g_err gardener::httpClient::get(char *responseBuffer, uint16_t responseBufferSiz
     if (err != ESP_OK)
     {
         G_LOGE("Failed to open HTTP connection: %s", esp_err_to_name(err));
+        return G_ERR_NETWORK;
     }
     else
     {
@@ -64,6 +65,8 @@ g_err gardener::httpClient::get(char *responseBuffer, uint16_t responseBufferSiz
         if (content_length < 0)
         {
             G_LOGE("HTTP client fetch headers failed");
+            esp_http_client_close(_client);
+            return G_ERR_INVALID_RESPONSE;
         }
         else
         {
@@ -79,6 +82,8 @@ g_err gardener::httpClient::get(char *responseBuffer, uint16_t responseBufferSiz
             {
                 responseBuffer[0] = 0;
                 G_LOGE("Failed to read response");
+                esp_http_client_close(_client);
+                return G_ERR_NO_DATA;
             }
         }
     }

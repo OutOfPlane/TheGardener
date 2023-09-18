@@ -53,6 +53,8 @@ g_err gardener::esp32nvs::writeUI8(const char *key, uint8_t value)
     if(!_isOpen)
         return G_ERR_INVALID_STATE;
     g_err erg = g_err_translate(nvs_set_u8(_handle, key, value));
+    if(erg == G_OK)
+        erg = g_err_translate(nvs_commit(_handle));
     return erg;
 }
 
@@ -61,5 +63,7 @@ g_err gardener::esp32nvs::writeStr(const char *key, const char *value)
     if(!_isOpen)
         return G_ERR_INVALID_STATE;
     g_err erg = g_err_translate(nvs_set_str(_handle, key, value));
+    if(erg == G_OK)
+        erg = g_err_translate(nvs_commit(_handle));
     return erg;
 }

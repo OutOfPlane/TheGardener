@@ -17,14 +17,19 @@
 #include <captivePortal.hpp>
 #include <timeout.hpp>
 #include <sht40.hpp>
+#include <esp32nvs.hpp>
 
 #include "webpage.h"
+
+#define __ST(A) #A
+#define __STR(A) __ST(A)
 
 using namespace gardener;
 
 void main_task(void *pvParameter);
 void updateSensorData();
 
+esp_err_t statusPageHandler(httpd_req_t *req);
 esp_err_t configPageHandler(httpd_req_t *req);
 esp_err_t dataRequestHandler(httpd_req_t *req);
 
@@ -43,6 +48,11 @@ int webLogHandler(const char *pattern, va_list lst)
                 printf("*");
             errClient.unlock();
         }
+        if (global::LED_STAT_ERR->lock(*global::LED_STAT_ERR))
+        {
+            global::LED_STAT_ERR->set(1);
+            global::LED_STAT_ERR->unlock();
+        }
     }
     return vprintf(pattern, lst);
 }
@@ -57,11 +67,13 @@ extern "C" void app_main()
 
 wifiAdapter adaptWiFi("WiFi", 10);
 char sensorDataBuff[1024];
+esp32nvs configStore("nvs");
 
 void main_task(void *pvParameter)
 {
     const char *_name = "main";
     vTaskDelay(4000 / portTICK_RATE_MS);
+    g_err erg = G_OK;
 
     //------BEGIN-Common HW Config--------------
     global::systemBus = new i2cPort("i2cSys", i2c0, 22, 21);
@@ -181,22 +193,58 @@ void main_task(void *pvParameter)
     char outBuf[bufSz];
 
     adaptWiFi.start();
-    adaptWiFi.setSSID("PeanutPay");
-    adaptWiFi.setPWD("PeanutPay");
+
+    char mySSID[65] = "VisioVerdis";
+    char myPWD[65] = "VisioVerdis";
+    size_t len;
+
+    configStore.openNamespace("netw");
+    
+    len = 65;
+    if ((erg = configStore.readStr("ssid", mySSID, len)) == G_OK)
+    {
+        G_LOGI("Retrieved SSID from nvs");
+    }
+    else
+    {
+        G_ERROR_DECODE(erg);
+    }
+
+    len = 65;
+    if ((erg = configStore.readStr("pwd", myPWD, len)) == G_OK)
+    {
+        G_LOGI("Retrieved PWD from nvs");
+    }
+    else
+    {
+        G_ERROR_DECODE(erg);
+    }
+    configStore.close();
+
+    G_LOGI("SSID: %s PWD: %s", mySSID, myPWD);
+
+    adaptWiFi.setSSID(mySSID);
+    adaptWiFi.setPWD(myPWD);
 
     char tmpSSID[33];
     sprintf(tmpSSID, "GraviPlant%s", global::systemInfo.hardware.hardwareID);
 
     adaptWiFi.startSTA(tmpSSID, "");
 
+    global::LED_STAT_STA->set(1);
+
     adaptWiFi.startConnect();
+
+    global::connectivity = &adaptWiFi;
 
     captivePortal prtl("portal", adaptWiFi.getNetIFAP());
 
     prtl.start();
 
-    prtl.on("/status", configPageHandler);
-    prtl.on("/data", dataRequestHandler);
+    prtl.onGet("/config", configPageHandler);
+    prtl.onGet("/status", statusPageHandler);
+    prtl.onPost("/status", statusPageHandler);
+    prtl.onGet("/data", dataRequestHandler);
 
     esp_log_set_vprintf(webLogHandler);
 
@@ -210,39 +258,46 @@ void main_task(void *pvParameter)
             requestTimeout.reset();
 
             int32_t gn, rd, bl, wh;
-            myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID);
-            if (sscanf(outBuf, "%d %d %d %d", &rd, &gn, &bl, &wh) != 4)
+            if (myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID) != G_OK)
             {
-                if (sscanf(outBuf, "%d", &rd) == 1)
-                {
-                    G_LOGI("No LIGHT pending");
-                }
-                else
-                {
-                    G_LOGE("Invalid light format: %s", outBuf);
-                }
+                global::LED_STAT_RDY->set(0);
             }
             else
             {
-                if (global::LED_RD->lock(*global::LED_RD, 100))
+                if (sscanf(outBuf, "%d %d %d %d", &rd, &gn, &bl, &wh) != 4)
                 {
-                    global::LED_RD->setVoltage(rd * 33);
-                    global::LED_RD->unlock();
+                    if (sscanf(outBuf, "%d", &rd) == 1)
+                    {
+                        G_LOGI("No LIGHT pending");
+                        global::LED_STAT_RDY->set(1);
+                    }
+                    else
+                    {
+                        G_LOGE("Invalid light format: %s", outBuf);
+                    }
                 }
-                if (global::LED_GN->lock(*global::LED_GN, 100))
+                else
                 {
-                    global::LED_GN->setVoltage(gn * 33);
-                    global::LED_GN->unlock();
-                }
-                if (global::LED_BL->lock(*global::LED_BL, 100))
-                {
-                    global::LED_BL->setVoltage(bl * 33);
-                    global::LED_BL->unlock();
-                }
-                if (global::LED_WH->lock(*global::LED_WH, 100))
-                {
-                    global::LED_WH->setVoltage(wh * 33);
-                    global::LED_WH->unlock();
+                    if (global::LED_RD->lock(*global::LED_RD, 100))
+                    {
+                        global::LED_RD->setVoltage(rd * 33);
+                        global::LED_RD->unlock();
+                    }
+                    if (global::LED_GN->lock(*global::LED_GN, 100))
+                    {
+                        global::LED_GN->setVoltage(gn * 33);
+                        global::LED_GN->unlock();
+                    }
+                    if (global::LED_BL->lock(*global::LED_BL, 100))
+                    {
+                        global::LED_BL->setVoltage(bl * 33);
+                        global::LED_BL->unlock();
+                    }
+                    if (global::LED_WH->lock(*global::LED_WH, 100))
+                    {
+                        global::LED_WH->setVoltage(wh * 33);
+                        global::LED_WH->unlock();
+                    }
                 }
             }
 
@@ -326,6 +381,11 @@ void main_task(void *pvParameter)
         }
 
         vTaskDelay(100 / portTICK_RATE_MS);
+        if (global::LED_STAT_ERR->lock(*global::LED_STAT_ERR, 100))
+        {
+            global::LED_STAT_ERR->set(0);
+            global::LED_STAT_ERR->unlock();
+        }
     }
 }
 
@@ -541,7 +601,9 @@ void updateSensorData()
 "AOUT_mV":%d,
 "mot_p":%d,
 "temp_d":%d,
-"hum_r":%d
+"hum_r":%d,
+"fwvers":"%s",
+"fwfeat":"%s"
 })EOF",
             global::systemInfo.hardware.hardwareID,
             tmpSSID,
@@ -573,10 +635,171 @@ void updateSensorData()
             (aout * 100 / 33),
             (mrev - mfwd) / 33,
             temper,
-            humi);
+            humi,
+            getFirmwareStringLong(),
+            __STR(G_CODE_FEATURE));
 }
 
 char pageBuff[1024];
+
+char decodeHex(const char *data)
+{
+    if ((*data >= '0') && (*data <= '9'))
+        return (*data) - '0';
+    if ((*data >= 'a') && (*data <= 'f'))
+        return ((*data) - 'a') + 10;
+    if ((*data >= 'A') && (*data <= 'F'))
+        return ((*data) - 'A') + 10;
+    return 0;
+}
+
+void parseURLencoded(char *data)
+{
+    char *dataPtr = data;
+    char *resPtr = data;
+
+    while (*dataPtr)
+    {
+        if (*dataPtr == '+')
+        {
+            *resPtr = ' ';
+            resPtr++;
+            dataPtr++;
+        }
+        else if (*dataPtr == '%')
+        {
+            *resPtr = (decodeHex(dataPtr + 1) << 4) | decodeHex(dataPtr + 2);
+            resPtr++;
+            dataPtr += 3;
+        }
+        else
+        {
+            *resPtr = *dataPtr;
+            resPtr++;
+            dataPtr++;
+        }
+    }
+    *resPtr = '\0';
+}
+
+esp_err_t statusPageHandler(httpd_req_t *req)
+{
+    captivePortal *prtl = (captivePortal *)req->user_ctx;
+    const char *_name = prtl->getName();
+
+    if (req->method == HTTP_POST)
+    {
+        char postBuff[500];
+        /* Truncate if content length larger than the buffer */
+        size_t recv_size = req->content_len;
+        if (recv_size > sizeof(postBuff) - 1)
+        {
+            recv_size = sizeof(postBuff) - 1;
+        }
+
+        int ret = httpd_req_recv(req, postBuff, recv_size);
+        if (ret <= 0)
+        { /* 0 return value indicates connection closed */
+            /* Check if timeout occurred */
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT)
+            {
+                /* In case of timeout one can choose to retry calling
+                 * httpd_req_recv(), but to keep it simple, here we
+                 * respond with an HTTP 408 (Request Timeout) error */
+                httpd_resp_send_408(req);
+            }
+            /* In case of error, returning ESP_FAIL will
+             * ensure that the underlying socket is closed */
+            return ESP_FAIL;
+        }
+        // terminate buffer
+        postBuff[recv_size] = '\0';
+        printf("%s\r\n", postBuff);
+
+        // change = and & to whitespace
+        char *content = postBuff;
+        while (*content)
+        {
+            if (*content == '=')
+                *content = ' ';
+            if (*content == '&')
+                *content = ' ';
+            content++;
+        }
+        printf("%s\r\n", postBuff);
+
+        char id[2];
+        char val[256 * 2];
+
+        if (sscanf(postBuff, "%c %255s %c %255s", &id[0], &val[0], &id[1], &val[256]) == 4)
+        {
+            parseURLencoded(&val[0]);
+            parseURLencoded(&val[256]);
+            configStore.openNamespace("netw");
+            g_err erg = G_OK;
+            for (size_t i = 0; i < 2; i++)
+            {
+                if (id[i] == 's')
+                {
+
+                    adaptWiFi.setSSID(&val[256 * i]);
+                    if ((erg = configStore.writeStr("ssid", &val[256 * i])) == G_OK)
+                    {
+                        G_LOGI("Store SSID to nvs");
+                    }
+                    else
+                    {
+                        G_ERROR_DECODE(erg);
+                    }
+                }
+
+                if (id[i] == 'm')
+                {
+                    adaptWiFi.setPWD(&val[256 * i]);
+                    if ((erg = configStore.writeStr("pwd", &val[256 * i])) == G_OK)
+                    {
+                        G_LOGI("Store PWD to nvs");
+                    }
+                    else
+                    {
+                        G_ERROR_DECODE(erg);
+                    }
+                }
+            }
+            configStore.close();
+            G_LOGI("Updated SSID and PWD");
+            adaptWiFi.startConnect();
+        }
+    }
+
+    httpd_resp_set_hdr(req, "Connection", "close");
+
+    httpd_resp_send_chunk(req, webpageHeader1, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, "GraviPlant Status", HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, webpageHeader2, HTTPD_RESP_USE_STRLEN);
+
+    sprintf(pageBuff, R"EOF(
+<nav>
+<b>GraviPlant</b>
+%s
+</nav>
+<div>
+<h1>Status</h1>
+<button onclick="window.location.href='/config';">
+Setup Network
+</button>)EOF",
+            global::systemInfo.hardware.hardwareID);
+    httpd_resp_send_chunk(req, pageBuff, HTTPD_RESP_USE_STRLEN);
+
+    httpd_resp_send_chunk(req, webpageDataTable, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, webpageTableUpdateScript, HTTPD_RESP_USE_STRLEN);
+
+    httpd_resp_send_chunk(req, "</div>", HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, webpageFooter, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, nullptr, 0);
+
+    return ESP_OK;
+}
 
 esp_err_t configPageHandler(httpd_req_t *req)
 {
@@ -586,26 +809,29 @@ esp_err_t configPageHandler(httpd_req_t *req)
     httpd_resp_set_hdr(req, "Connection", "close");
 
     httpd_resp_send_chunk(req, webpageHeader1, HTTPD_RESP_USE_STRLEN);
-    httpd_resp_send_chunk(req, "GraviPlant Status", HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send_chunk(req, "GraviPlant Config", HTTPD_RESP_USE_STRLEN);
     httpd_resp_send_chunk(req, webpageHeader2, HTTPD_RESP_USE_STRLEN);
 
     sprintf(pageBuff, R"EOF(
-    <nav>
-    <b>GraviPlant</b>
-    %s
-    </nav>
-    <div>
-    <h1>Status</h1>)EOF",
+<nav>
+<b>GraviPlant</b>
+%s
+</nav>
+<div>
+<h1>Config</h1>
+<button onclick="window.location.href='/status';">
+Back
+</button><br>
+<form action=/status method=post>
+<label>WiFi SSID:</label><input type=text name=s></input>
+<label>WiFi PWD:</label><input type=password name=m></input>
+<input type=submit value=Start>
+</form>)EOF",
             global::systemInfo.hardware.hardwareID);
     httpd_resp_send_chunk(req, pageBuff, HTTPD_RESP_USE_STRLEN);
 
-    httpd_resp_send_chunk(req, webpageDataTable, HTTPD_RESP_USE_STRLEN);
-    httpd_resp_send_chunk(req, webpageTableUpdateScript, HTTPD_RESP_USE_STRLEN);
-
     httpd_resp_send_chunk(req, "</div>", HTTPD_RESP_USE_STRLEN);
-
     httpd_resp_send_chunk(req, webpageFooter, HTTPD_RESP_USE_STRLEN);
-
     httpd_resp_send_chunk(req, nullptr, 0);
 
     return ESP_OK;
