@@ -74,7 +74,7 @@ g_err esp32ioPin::mode(pinDirection dir)
                 .speed_mode = LEDC_HIGH_SPEED_MODE,
                 .duty_resolution = LEDC_TIMER_10_BIT,
                 .timer_num = LEDC_TIMER_0,
-                .freq_hz = 25000, // Set output frequency at 25 kHz
+                .freq_hz = 75000, // Set output frequency at 75 kHz
                 .clk_cfg = LEDC_AUTO_CLK};
             if ((erg = g_err_translate(ledc_timer_config(&ledc_timer))) != G_OK)
                 return erg;
