@@ -15,7 +15,8 @@ namespace gardener
         virtual ~captivePortal();
         virtual g_err start();
         virtual void stop();
-        virtual g_err on(const char *path, esp_err_t (*handler)(httpd_req_t *r));
+        virtual g_err onGet(const char *path, esp_err_t (*handler)(httpd_req_t *r));
+        virtual g_err onPost(const char *path, esp_err_t (*handler)(httpd_req_t *r));
 
     protected:
     private:

@@ -100,7 +100,7 @@ void gardener::captivePortal::stop()
 {
 }
 
-g_err gardener::captivePortal::on(const char *path, esp_err_t (*handler)(httpd_req_t *r))
+g_err gardener::captivePortal::onGet(const char *path, esp_err_t (*handler)(httpd_req_t *r))
 {
     /** URI handler */
     httpd_uri_t common_get_uri = {
@@ -110,6 +110,18 @@ g_err gardener::captivePortal::on(const char *path, esp_err_t (*handler)(httpd_r
         .user_ctx = this};
 
     return g_err_translate(httpd_register_uri_handler(_server, &common_get_uri));
+}
+
+g_err gardener::captivePortal::onPost(const char *path, esp_err_t (*handler)(httpd_req_t *r))
+{
+    /** URI handler */
+    httpd_uri_t common_post_uri = {
+        .uri = path,
+        .method = HTTP_POST,
+        .handler = handler,
+        .user_ctx = this};
+
+    return g_err_translate(httpd_register_uri_handler(_server, &common_post_uri));
 }
 
 void gardener::captivePortal::_dns_task(void *args)
@@ -221,7 +233,7 @@ esp_err_t gardener::captivePortal::_commonHandler(httpd_req_t *req, httpd_err_co
         G_LOGI("No redirect needed for HOST: %s", req_hdr_host_val);
 
         
-        const char *resp_str = "Hello World";
+        const char *resp_str = "Graviplant Webserver";
         httpd_resp_send(req, resp_str, strlen(resp_str));
     }
 
