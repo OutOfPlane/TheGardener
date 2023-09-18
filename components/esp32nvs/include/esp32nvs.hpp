@@ -22,6 +22,7 @@ namespace gardener
         g_err readI16(const char *key, int16_t &value);
         g_err readI32(const char *key, int32_t &value);
         g_err readI64(const char *key, int64_t &value);
+        g_err readStr(const char *key, char *value, size_t &length);
 
         g_err writeUI8(const char *key, uint8_t value);
         g_err writeUI16(const char *key, uint16_t value);
@@ -31,6 +32,7 @@ namespace gardener
         g_err writeI16(const char *key, int16_t value);
         g_err writeI32(const char *key, int32_t value);
         g_err writeI64(const char *key, int64_t value);
+        g_err writeStr(const char *key, const char *value);
 
     protected:
     private:
