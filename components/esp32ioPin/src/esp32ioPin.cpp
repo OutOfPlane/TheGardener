@@ -74,7 +74,7 @@ g_err esp32ioPin::mode(pinDirection dir)
                 .speed_mode = LEDC_HIGH_SPEED_MODE,
                 .duty_resolution = LEDC_TIMER_10_BIT,
                 .timer_num = LEDC_TIMER_0,
-                .freq_hz = 25000, // Set output frequency at 5 kHz
+                .freq_hz = 25000, // Set output frequency at 25 kHz
                 .clk_cfg = LEDC_AUTO_CLK};
             if ((erg = g_err_translate(ledc_timer_config(&ledc_timer))) != G_OK)
                 return erg;
@@ -159,11 +159,11 @@ g_err esp32ioPin::setVoltage(int32_t voltage_mV)
 {
     _level = voltage_mV;
     G_LOGI("Set voltage to %d mV", voltage_mV);
-    int32_t val = (voltage_mV * 1023) / 3300;
+    int32_t val = (voltage_mV * 1024) / 3300;
     if (val < 0)
         val = 0;
-    if (val > 1023)
-        val = 1023;
+    if (val > 1024)
+        val = 1024;
     ledc_set_duty(LEDC_HIGH_SPEED_MODE, (ledc_channel_t)_this_ledc_channel, val);
     return g_err_translate(ledc_update_duty(LEDC_HIGH_SPEED_MODE, (ledc_channel_t)_this_ledc_channel));
 }
