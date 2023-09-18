@@ -4,8 +4,6 @@
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 
-#define TEST_SSID "PeanutPay"
-#define TEST_PWD "PeanutPay"
 
 using namespace gardener;
 
@@ -45,6 +43,7 @@ g_err gardener::wifiAdapter::startConnect()
     // TODO: handle errors
     if (_wifiStarted)
     {
+        ESP_ERROR_CHECK(esp_wifi_disconnect());
         ESP_ERROR_CHECK(esp_wifi_connect());
     }else{
         ESP_ERROR_CHECK(esp_wifi_start());
@@ -68,13 +67,17 @@ g_err wifiAdapter::waitConnected()
      * happened. */
     if (bits & WIFI_CONNECTED_BIT)
     {
-        G_LOGI("connected to ap SSID:%s password:%s",
-               TEST_SSID, TEST_PWD);
+        char ssid[65];
+        getSSID(ssid);
+        G_LOGI("connected to ap SSID:%s",
+               ssid);
     }
     else if (bits & WIFI_FAIL_BIT)
     {
-        G_LOGI("Failed to connect to SSID:%s, password:%s",
-               TEST_SSID, TEST_PWD);
+        char ssid[65];
+        getSSID(ssid);
+        G_LOGI("Failed to connect to SSID:%s",
+               ssid);
     }
     else
     {
