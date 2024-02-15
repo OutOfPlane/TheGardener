@@ -3,7 +3,8 @@
         "*.tcc": "cpp",
         "mutex": "cpp",
         "*.ipp": "cpp",
-        "cstring": "cpp"
+        "cstring": "cpp",
+        "cstdlib": "cpp"
     },
     "idf.portWin": "COM4"
 }

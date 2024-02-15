@@ -41,6 +41,8 @@ ioPin *global::HC4051S0;
 ioPin *global::HC4051S1;
 ioPin *global::HC4051S2;
 
+ioPin *global::enc28j60_RESET;
+
 ioPin *global::iSense_LED_RD;
 ioPin *global::iSense_LED_GN;
 ioPin *global::iSense_LED_BL;

@@ -1,1 +1,1 @@
-idf_component_register(SRCS "src/enc28j60.cpp" INCLUDE_DIRS "include" REQUIRES networkAdapter)
+idf_component_register(SRCS "src/enc28j60.cpp" "src/enc28j60_mac.c" "src/enc28j60_phy.c" "src/enc28j60_spi.c" INCLUDE_DIRS "include" REQUIRES networkAdapter ioPin)

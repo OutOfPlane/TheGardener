@@ -730,11 +730,12 @@ static void emac_enc28j60_task(void *arg)
 
     while (1) {
 loop_start:
+        vTaskDelay(100);
         // block until some task notifies me or check the gpio by myself
-        if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000)) == 0 &&    // if no notification ...
-            gpio_get_level(emac->int_gpio_num) != 0) {               // ...and no interrupt asserted
-            continue;                                                // -> just continue to check again
-        }
+        // if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000)) == 0 &&    // if no notification ...
+        //     gpio_get_level(emac->int_gpio_num) != 0) {               // ...and no interrupt asserted
+        //     continue;                                                // -> just continue to check again
+        // }
         // the host controller should clear the global enable bit for the interrupt pin before servicing the interrupt
         MAC_CHECK_NO_RET(enc28j60_do_bitwise_clr(emac, ENC28J60_EIR, EIE_INTIE) == ESP_OK,
                         "clear EIE_INTIE failed", loop_start);
@@ -823,6 +824,7 @@ loop_end:
         MAC_CHECK_NO_RET(enc28j60_do_bitwise_set(emac, ENC28J60_EIE, EIE_INTIE) == ESP_OK,
                             "clear INTIE failed", loop_start);
         // Note: Interrupt flag PKTIF is cleared when PKTDEC is set (in receive function)
+        
     }
     vTaskDelete(NULL);
 }
@@ -1005,14 +1007,14 @@ static esp_err_t emac_enc28j60_init(esp_eth_mac_t *mac)
     esp_eth_mediator_t *eth = emac->eth;
 
     /* init gpio used for reporting enc28j60 interrupt */
-    gpio_reset_pin(emac->int_gpio_num);
-    gpio_set_direction(emac->int_gpio_num, GPIO_MODE_INPUT);
-    gpio_set_pull_mode(emac->int_gpio_num, GPIO_PULLUP_ONLY);
-    gpio_set_intr_type(emac->int_gpio_num, GPIO_INTR_NEGEDGE);
-    gpio_intr_enable(emac->int_gpio_num);
-    gpio_isr_handler_add(emac->int_gpio_num, enc28j60_isr_handler, emac);
-    MAC_CHECK(eth->on_state_changed(eth, ETH_STATE_LLINIT, NULL) == ESP_OK,
-              "lowlevel init failed", out, ESP_FAIL);
+    // gpio_reset_pin(emac->int_gpio_num);
+    // gpio_set_direction(emac->int_gpio_num, GPIO_MODE_INPUT);
+    // gpio_set_pull_mode(emac->int_gpio_num, GPIO_PULLUP_ONLY);
+    // gpio_set_intr_type(emac->int_gpio_num, GPIO_INTR_NEGEDGE);
+    // gpio_intr_enable(emac->int_gpio_num);
+    // gpio_isr_handler_add(emac->int_gpio_num, enc28j60_isr_handler, emac);
+    // MAC_CHECK(eth->on_state_changed(eth, ETH_STATE_LLINIT, NULL) == ESP_OK,
+    //           "lowlevel init failed", out, ESP_FAIL);
 
     /* reset enc28j60 */
     MAC_CHECK(enc28j60_do_reset(emac) == ESP_OK, "reset enc28j60 failed", out, ESP_FAIL);
@@ -1025,8 +1027,8 @@ static esp_err_t emac_enc28j60_init(esp_eth_mac_t *mac)
 
     return ESP_OK;
 out:
-    gpio_isr_handler_remove(emac->int_gpio_num);
-    gpio_reset_pin(emac->int_gpio_num);
+    // gpio_isr_handler_remove(emac->int_gpio_num);
+    // gpio_reset_pin(emac->int_gpio_num);
     eth->on_state_changed(eth, ETH_STATE_DEINIT, NULL);
     return ret;
 }
@@ -1036,8 +1038,8 @@ static esp_err_t emac_enc28j60_deinit(esp_eth_mac_t *mac)
     emac_enc28j60_t *emac = __containerof(mac, emac_enc28j60_t, parent);
     esp_eth_mediator_t *eth = emac->eth;
     mac->stop(mac);
-    gpio_isr_handler_remove(emac->int_gpio_num);
-    gpio_reset_pin(emac->int_gpio_num);
+    // gpio_isr_handler_remove(emac->int_gpio_num);
+    // gpio_reset_pin(emac->int_gpio_num);
     eth->on_state_changed(eth, ETH_STATE_DEINIT, NULL);
     return ESP_OK;
 }
@@ -1062,12 +1064,12 @@ esp_eth_mac_t *esp_eth_mac_new_enc28j60(const eth_enc28j60_config_t *enc28j60_co
     emac = calloc(1, sizeof(emac_enc28j60_t));
     MAC_CHECK(emac, "calloc emac failed", err, NULL);
     /* enc28j60 driver is interrupt driven */
-    MAC_CHECK(enc28j60_config->int_gpio_num >= 0, "error interrupt gpio number", err, NULL);
+    // MAC_CHECK(enc28j60_config->int_gpio_num >= 0, "error interrupt gpio number", err, NULL);
     emac->last_bank = 0xFF;
     emac->next_packet_ptr = ENC28J60_BUF_RX_START;
     /* bind methods and attributes */
     emac->sw_reset_timeout_ms = mac_config->sw_reset_timeout_ms;
-    emac->int_gpio_num = enc28j60_config->int_gpio_num;
+    // emac->int_gpio_num = enc28j60_config->int_gpio_num;
     emac->spi_hdl = enc28j60_config->spi_hdl;
     emac->parent.set_mediator = emac_enc28j60_set_mediator;
     emac->parent.init = emac_enc28j60_init;

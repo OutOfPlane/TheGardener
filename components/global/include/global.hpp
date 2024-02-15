@@ -47,6 +47,8 @@ namespace gardener
         extern ioPin *HC4051S1;
         extern ioPin *HC4051S2;
 
+        extern ioPin *enc28j60_RESET;
+
         extern ioPin *iSense_LED_RD;
         extern ioPin *iSense_LED_GN;
         extern ioPin *iSense_LED_BL;
@@ -54,6 +56,7 @@ namespace gardener
         extern ioPin *iSense_MOT;
         extern ioPin *iSense_AUX1;
         extern ioPin *iSense_AUX2;
+        
 
 
         //I2C-Ports

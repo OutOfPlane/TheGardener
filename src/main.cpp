@@ -14,7 +14,7 @@
 #include <muxedPin.hpp>
 #include <httpClient.hpp>
 #include <wifiAdapter.hpp>
-#include <enc28J60.hpp>
+#include <enc28j60.hpp>
 #include <captivePortal.hpp>
 #include <timeout.hpp>
 #include <sht40.hpp>
@@ -67,6 +67,7 @@ extern "C" void app_main()
 }
 
 wifiAdapter adaptWiFi("WiFi", 10);
+enc28j60 adaptEth("Eth", 19, 23, 18, 5, 2, 2, global::enc28j60_RESET);
 char sensorDataBuff[1024];
 esp32nvs configStore("nvs");
 
@@ -124,8 +125,10 @@ void main_task(void *pvParameter)
     global::HC4051S0 = myPortExpander.getIOPin(0);
     global::HC4051S1 = myPortExpander.getIOPin(1);
     global::HC4051S2 = myPortExpander.getIOPin(2);
-    externalMux myMux("HC4051", 8, global::HC4051S0, global::HC4051S1, global::HC4051S2);
 
+    global::enc28j60_RESET = new esp32ioPin("ENC_Reset", 15);
+
+    externalMux myMux("HC4051", 8, global::HC4051S0, global::HC4051S1, global::HC4051S2);
     adcPin muxADC("muxADC", 7, &myADC, 1);
     global::iSense_LED_RD = new muxedPin("iADC_RD", &muxADC, &myMux, 0);
     global::iSense_LED_GN = new muxedPin("iADC_GN", &muxADC, &myMux, 1);
@@ -172,6 +175,8 @@ void main_task(void *pvParameter)
     global::HC4051S1->mode(PIN_OUTPUT);
     global::HC4051S2->mode(PIN_OUTPUT);
 
+    global::enc28j60_RESET->mode(PIN_OUTPUT);
+
     global::LED_RD->mode(PIN_OUTPUT_PWM);
     global::LED_GN->mode(PIN_OUTPUT_PWM);
     global::LED_BL->mode(PIN_OUTPUT_PWM);
@@ -194,6 +199,18 @@ void main_task(void *pvParameter)
     char outBuf[bufSz];
 
     adaptWiFi.start();
+
+
+    global::enc28j60_RESET->set(0);
+    vTaskDelay(100 / portTICK_RATE_MS);
+    global::enc28j60_RESET->set(1);
+    vTaskDelay(100 / portTICK_RATE_MS);
+    if((erg = adaptEth.start()) == G_OK)
+    {
+        G_LOGI("ETH start success");
+    }else{
+        G_ERROR_DECODE(erg);
+    }
 
     char mySSID[65] = "VisioVerdis";
     char myPWD[65] = "VisioVerdis";
@@ -254,6 +271,10 @@ void main_task(void *pvParameter)
 
     while (1)
     {
+        if(getchar() == 'r')
+            esp_restart();
+
+
         if (requestTimeout.isEllapsed())
         {
             requestTimeout.reset();

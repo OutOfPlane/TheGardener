@@ -15,7 +15,7 @@
 esp_eth_mac_t* enc28j60_new_mac( spi_device_handle_t *spi_handle, int INT_GPIO )
 {
     eth_enc28j60_config_t enc28j60_config = ETH_ENC28J60_DEFAULT_CONFIG( *spi_handle );
-    enc28j60_config.int_gpio_num = INT_GPIO;
+    // enc28j60_config.int_gpio_num = INT_GPIO;
 
     eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
     mac_config.smi_mdc_gpio_num  = -1; // ENC28J60 doesn't have SMI interface
