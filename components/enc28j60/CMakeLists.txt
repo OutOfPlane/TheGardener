@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/enc28j60.cpp" INCLUDE_DIRS "include" REQUIRES networkAdapter)

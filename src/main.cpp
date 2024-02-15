@@ -14,6 +14,7 @@
 #include <muxedPin.hpp>
 #include <httpClient.hpp>
 #include <wifiAdapter.hpp>
+#include <enc28J60.hpp>
 #include <captivePortal.hpp>
 #include <timeout.hpp>
 #include <sht40.hpp>
