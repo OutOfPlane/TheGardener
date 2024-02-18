@@ -6,6 +6,7 @@
 #include <systemInfo.hpp>
 #include <networkAdapter.hpp>
 #include <humidityTemperatureSensor.hpp>
+#include <esp32freqCounter.hpp>
 
 namespace gardener
 {
@@ -17,7 +18,7 @@ namespace gardener
         //External PINs        
         extern ioPin *OUT1;
         extern ioPin *OUT2;
-        extern ioPin *IN1;
+        extern esp32freqCounter *IN1;
         extern ioPin *IN2;
         extern ioPin *AIN0;
         extern ioPin *AIN1;

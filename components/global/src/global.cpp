@@ -8,7 +8,7 @@ sysInfo_t global::systemInfo;
 // PINs
 ioPin *global::OUT1;
 ioPin *global::OUT2;
-ioPin *global::IN1;
+esp32freqCounter *global::IN1;
 ioPin *global::IN2;
 ioPin *global::AIN0;
 ioPin *global::AIN1;

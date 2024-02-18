@@ -19,6 +19,7 @@
 #include <timeout.hpp>
 #include <sht40.hpp>
 #include <esp32nvs.hpp>
+#include <esp32freqCounter.hpp>
 
 #include "webpage.h"
 
@@ -67,7 +68,7 @@ extern "C" void app_main()
 }
 
 wifiAdapter adaptWiFi("WiFi", 10);
-enc28j60 adaptEth("Eth", 19, 23, 18, 5, 2, 2, global::enc28j60_RESET);
+enc28j60 adaptEth("Eth", 19, 23, 18, 5, 8, 2, global::enc28j60_RESET);
 char sensorDataBuff[1024];
 esp32nvs configStore("nvs");
 
@@ -97,7 +98,7 @@ void main_task(void *pvParameter)
     //------BEGIN-IO-Hardware--------------
     global::OUT1 = new esp32ioPin("OUT1", 32);
     global::OUT2 = new esp32ioPin("OUT2", 33);
-    global::IN1 = new esp32ioPin("IN1", 34);
+    global::IN1 = new esp32freqCounter("IN1", 34);
     global::IN2 = new esp32ioPin("IN2", 35);
     global::AIN0 = new adcPin("AIN0", 0, &myADC, 4.8);
     global::AIN1 = new adcPin("AIN1", 4, &myADC, 4.8);
@@ -164,7 +165,7 @@ void main_task(void *pvParameter)
 
     global::OUT1->mode(PIN_OUTPUT);
     global::OUT2->mode(PIN_OUTPUT);
-    global::IN1->mode(PIN_INPUT);
+    //global::IN1->mode(PIN_INPUT);
     global::IN2->mode(PIN_INPUT);
     global::AUX1->mode(PIN_OUTPUT);
     global::AUX2->mode(PIN_OUTPUT);
@@ -200,15 +201,16 @@ void main_task(void *pvParameter)
 
     adaptWiFi.start();
 
-
     global::enc28j60_RESET->set(0);
     vTaskDelay(100 / portTICK_RATE_MS);
     global::enc28j60_RESET->set(1);
     vTaskDelay(100 / portTICK_RATE_MS);
-    if((erg = adaptEth.start()) == G_OK)
+    if ((erg = adaptEth.start()) == G_OK)
     {
         G_LOGI("ETH start success");
-    }else{
+    }
+    else
+    {
         G_ERROR_DECODE(erg);
     }
 
@@ -217,7 +219,7 @@ void main_task(void *pvParameter)
     size_t len;
 
     configStore.openNamespace("netw");
-    
+
     len = 65;
     if ((erg = configStore.readStr("ssid", mySSID, len)) == G_OK)
     {
@@ -267,13 +269,53 @@ void main_task(void *pvParameter)
     esp_log_set_vprintf(webLogHandler);
 
     timeout waterTimeout(0, SECONDS);
-    timeout requestTimeout(10, SECONDS);
+    timeout requestTimeout(1000, SECONDS);
+
+    timeout updateFreqTimeout(1000, MILLISECONDS);
+
+    uint32_t aoutVolt = 0;
 
     while (1)
     {
-        if(getchar() == 'r')
-            esp_restart();
+        int chr = getchar();
+        if (chr != EOF)
+        {
+            if (chr == 'r')
+            {
+                G_LOGI("RESTART REQUESTED");
+                esp_restart();
+            }
 
+            if (chr == 'g')
+            {
+                G_LOGI("SET OUT1 to 1");
+                global::OUT1->set(1);
+            }
+
+            if (chr == 's')
+            {
+                G_LOGI("SET OUT1 to 0");
+                global::OUT1->set(0);
+            }
+
+            if (chr == 'm')
+            {
+                G_LOGI("INC AOUT to by 100mV");
+                if (global::AOUT->lock(*global::AOUT, 100))
+                {
+                    aoutVolt += 100;
+                    global::AOUT->setVoltage((aoutVolt * 33) / 100);
+                    global::AOUT->unlock();
+                }
+            }
+        }
+
+        if(updateFreqTimeout.isEllapsed())
+        {
+            updateFreqTimeout.reset();
+            uint8_t val = 0;
+            global::IN1->get(val);
+        }
 
         if (requestTimeout.isEllapsed())
         {
