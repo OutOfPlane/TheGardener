@@ -34,6 +34,7 @@ void updateSensorData();
 esp_err_t statusPageHandler(httpd_req_t *req);
 esp_err_t configPageHandler(httpd_req_t *req);
 esp_err_t dataRequestHandler(httpd_req_t *req);
+esp_err_t sensorUnitRequestHandler(httpd_req_t *req);
 
 httpClient errClient("EHTTP");
 int webLogHandler(const char *pattern, va_list lst)
@@ -165,7 +166,7 @@ void main_task(void *pvParameter)
 
     global::OUT1->mode(PIN_OUTPUT);
     global::OUT2->mode(PIN_OUTPUT);
-    //global::IN1->mode(PIN_INPUT);
+    // global::IN1->mode(PIN_INPUT);
     global::IN2->mode(PIN_INPUT);
     global::AUX1->mode(PIN_OUTPUT);
     global::AUX2->mode(PIN_OUTPUT);
@@ -265,6 +266,7 @@ void main_task(void *pvParameter)
     prtl.onGet("/status", statusPageHandler);
     prtl.onPost("/status", statusPageHandler);
     prtl.onGet("/data", dataRequestHandler);
+    prtl.onPost("/sensorUnit", sensorUnitRequestHandler);
 
     esp_log_set_vprintf(webLogHandler);
 
@@ -310,7 +312,7 @@ void main_task(void *pvParameter)
             }
         }
 
-        if(updateFreqTimeout.isEllapsed())
+        if (updateFreqTimeout.isEllapsed())
         {
             updateFreqTimeout.reset();
             uint8_t val = 0;
@@ -912,6 +914,100 @@ esp_err_t dataRequestHandler(httpd_req_t *req)
 
     httpd_resp_send_chunk(req, sensorDataBuff, HTTPD_RESP_USE_STRLEN);
 
+    httpd_resp_send_chunk(req, nullptr, 0);
+
+    return ESP_OK;
+}
+
+esp_err_t sensorUnitRequestHandler(httpd_req_t *req)
+{
+    captivePortal *prtl = (captivePortal *)req->user_ctx;
+    const char *_name = prtl->getName();
+    if (req->method == HTTP_POST)
+    {
+        char postBuff[500];
+        /* Truncate if content length larger than the buffer */
+        size_t recv_size = req->content_len;
+        if (recv_size > sizeof(postBuff) - 1)
+        {
+            recv_size = sizeof(postBuff) - 1;
+        }
+
+        int ret = httpd_req_recv(req, postBuff, recv_size);
+        if (ret <= 0)
+        { /* 0 return value indicates connection closed */
+            /* Check if timeout occurred */
+            if (ret == HTTPD_SOCK_ERR_TIMEOUT)
+            {
+                /* In case of timeout one can choose to retry calling
+                 * httpd_req_recv(), but to keep it simple, here we
+                 * respond with an HTTP 408 (Request Timeout) error */
+                httpd_resp_send_408(req);
+            }
+            /* In case of error, returning ESP_FAIL will
+             * ensure that the underlying socket is closed */
+            return ESP_FAIL;
+        }
+        // terminate buffer
+        postBuff[recv_size] = '\0';
+        printf("%s\r\n", postBuff);
+
+        // change = and & to whitespace
+        char *content = postBuff;
+        while (*content)
+        {
+            if (*content == '=')
+                *content = ' ';
+            if (*content == '&')
+                *content = ' ';
+            content++;
+        }
+        printf("%s\r\n", postBuff);
+
+        char id[2];
+        char val[256 * 2];
+
+        if (sscanf(postBuff, "%c %255s %c %255s", &id[0], &val[0], &id[1], &val[256]) == 4)
+        {
+            parseURLencoded(&val[0]);
+            parseURLencoded(&val[256]);
+            configStore.openNamespace("netw");
+            g_err erg = G_OK;
+            for (size_t i = 0; i < 2; i++)
+            {
+                if (id[i] == 's')
+                {
+
+                    adaptWiFi.setSSID(&val[256 * i]);
+                    if ((erg = configStore.writeStr("ssid", &val[256 * i])) == G_OK)
+                    {
+                        G_LOGI("Store SSID to nvs");
+                    }
+                    else
+                    {
+                        G_ERROR_DECODE(erg);
+                    }
+                }
+
+                if (id[i] == 'm')
+                {
+                    adaptWiFi.setPWD(&val[256 * i]);
+                    if ((erg = configStore.writeStr("pwd", &val[256 * i])) == G_OK)
+                    {
+                        G_LOGI("Store PWD to nvs");
+                    }
+                    else
+                    {
+                        G_ERROR_DECODE(erg);
+                    }
+                }
+            }
+            configStore.close();
+            G_LOGI("Updated SSID and PWD");
+            adaptWiFi.startConnect();
+        }
+    }
+    httpd_resp_set_hdr(req, "Connection", "close");
     httpd_resp_send_chunk(req, nullptr, 0);
 
     return ESP_OK;
