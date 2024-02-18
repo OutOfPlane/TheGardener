@@ -36,7 +36,7 @@ g_err gardener::enc28j60::_start()
 
     uint8_t ENC28J60_Default_Mac[6] = {0x02, 0x00, 0x00, 0x12, 0x34, 0x56};
 
-    esp_efuse_mac_get_custom(ENC28J60_Default_Mac);
+    esp_efuse_mac_get_default(ENC28J60_Default_Mac);
 
     esp_base_mac_addr_set(ENC28J60_Default_Mac);
 
