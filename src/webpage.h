@@ -155,6 +155,36 @@ const char *webpageDataTable = R"EOF(
 <td id="wh_p">-</td>
 <td id="iwh_mA">-</td>
 </tr>
+<tr>
+<td>S-UNIT</td>
+<td>ID</td>
+<td id="sunit_id">-</td>
+</tr>
+<tr>
+<td>CH0</td>
+<td></td>
+<td id="sunit_ch0">-</td>
+</tr>
+<tr>
+<td>CH1</td>
+<td></td>
+<td id="sunit_ch1">-</td>
+</tr>
+<tr>
+<td>CH2</td>
+<td></td>
+<td id="sunit_ch2">-</td>
+</tr>
+<tr>
+<td>CH3</td>
+<td></td>
+<td id="sunit_ch3">-</td>
+</tr>
+<tr>
+<td>Temp</td>
+<td></td>
+<td id="sunit_temp">-</td>
+</tr>
 </table>
 )EOF";
 
@@ -183,6 +213,14 @@ if(key.includes("_d"))
 document.getElementById(key).innerHTML = (data[key]/10.0).toFixed(1) + " °C";
 if(key.includes("_r"))
 document.getElementById(key).innerHTML = (data[key]/10.0).toFixed(1) + " %rH";
+}
+if(key.includes("sunit")){
+document.getElementById("sunit_id").innerHTML = data["sunit"]["SUID"];
+document.getElementById("sunit_ch0").innerHTML = (data["sunit"]["CH0"]).toFixed(2) + " V";
+document.getElementById("sunit_ch1").innerHTML = (data["sunit"]["CH1"]).toFixed(2) + " V";
+document.getElementById("sunit_ch2").innerHTML = (data["sunit"]["CH2"]).toFixed(2) + " V";
+document.getElementById("sunit_ch3").innerHTML = (data["sunit"]["CH3"]).toFixed(2) + " V";
+document.getElementById("sunit_temp").innerHTML = (data["sunit"]["TEMP"]).toFixed(1) + " °C";
 }
 }
 }

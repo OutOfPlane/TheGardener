@@ -71,6 +71,7 @@ extern "C" void app_main()
 wifiAdapter adaptWiFi("WiFi", 10);
 enc28j60 adaptEth("Eth", 19, 23, 18, 5, 8, 2, global::enc28j60_RESET);
 char sensorDataBuff[1024];
+char sensorUnitBuff[200];
 esp32nvs configStore("nvs");
 
 void main_task(void *pvParameter)
@@ -92,7 +93,7 @@ void main_task(void *pvParameter)
             G_LOGI("DEV %02X is present", i);
         }
     }
-
+    
     TCA9534 myPortExpander("TCA9534", global::systemBus);
     ads7828 myADC("ADS7828", global::systemBus);
 
@@ -199,6 +200,7 @@ void main_task(void *pvParameter)
     httpClient myClient("http");
     uint16_t bufSz = 256;
     char outBuf[bufSz];
+    strcpy(sensorUnitBuff, "{}");
 
     adaptWiFi.start();
 
@@ -266,7 +268,7 @@ void main_task(void *pvParameter)
     prtl.onGet("/status", statusPageHandler);
     prtl.onPost("/status", statusPageHandler);
     prtl.onGet("/data", dataRequestHandler);
-    prtl.onPost("/sensorUnit", sensorUnitRequestHandler);
+    prtl.onPost("/sensorUnit/", sensorUnitRequestHandler);
 
     esp_log_set_vprintf(webLogHandler);
 
@@ -669,7 +671,8 @@ void updateSensorData()
 "temp_d":%d,
 "hum_r":%d,
 "fwvers":"%s",
-"fwfeat":"%s"
+"fwfeat":"%s",
+"sunit":%s
 })EOF",
             global::systemInfo.hardware.hardwareID,
             tmpSSID,
@@ -703,7 +706,8 @@ void updateSensorData()
             temper,
             humi,
             getFirmwareStringLong(),
-            __STR(G_CODE_FEATURE));
+            __STR(G_CODE_FEATURE),
+            sensorUnitBuff);
 }
 
 char pageBuff[1024];
@@ -951,61 +955,8 @@ esp_err_t sensorUnitRequestHandler(httpd_req_t *req)
         // terminate buffer
         postBuff[recv_size] = '\0';
         printf("%s\r\n", postBuff);
+        strlcpy(sensorUnitBuff, postBuff, sizeof(sensorUnitBuff));
 
-        // change = and & to whitespace
-        char *content = postBuff;
-        while (*content)
-        {
-            if (*content == '=')
-                *content = ' ';
-            if (*content == '&')
-                *content = ' ';
-            content++;
-        }
-        printf("%s\r\n", postBuff);
-
-        char id[2];
-        char val[256 * 2];
-
-        if (sscanf(postBuff, "%c %255s %c %255s", &id[0], &val[0], &id[1], &val[256]) == 4)
-        {
-            parseURLencoded(&val[0]);
-            parseURLencoded(&val[256]);
-            configStore.openNamespace("netw");
-            g_err erg = G_OK;
-            for (size_t i = 0; i < 2; i++)
-            {
-                if (id[i] == 's')
-                {
-
-                    adaptWiFi.setSSID(&val[256 * i]);
-                    if ((erg = configStore.writeStr("ssid", &val[256 * i])) == G_OK)
-                    {
-                        G_LOGI("Store SSID to nvs");
-                    }
-                    else
-                    {
-                        G_ERROR_DECODE(erg);
-                    }
-                }
-
-                if (id[i] == 'm')
-                {
-                    adaptWiFi.setPWD(&val[256 * i]);
-                    if ((erg = configStore.writeStr("pwd", &val[256 * i])) == G_OK)
-                    {
-                        G_LOGI("Store PWD to nvs");
-                    }
-                    else
-                    {
-                        G_ERROR_DECODE(erg);
-                    }
-                }
-            }
-            configStore.close();
-            G_LOGI("Updated SSID and PWD");
-            adaptWiFi.startConnect();
-        }
     }
     httpd_resp_set_hdr(req, "Connection", "close");
     httpd_resp_send_chunk(req, nullptr, 0);
