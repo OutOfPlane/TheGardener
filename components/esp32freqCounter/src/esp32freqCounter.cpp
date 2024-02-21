@@ -73,11 +73,11 @@ esp32freqCounter::~esp32freqCounter()
 {
 }
 
-g_err gardener::esp32freqCounter::get(uint8_t &val)
+g_err gardener::esp32freqCounter::getFrequency(int32_t &freqHz)
 {
     int16_t cnt;
     pcnt_get_counter_value(PCNT_UNIT_0, &cnt);
-    val = 0;
+    freqHz = 0;
 
     if(!_lastUpdate)
     {
@@ -90,10 +90,10 @@ g_err gardener::esp32freqCounter::get(uint8_t &val)
     
     int64_t pulsePerSecond = (cnt * 1000000)/delta;
 
-    G_LOGI("Freq: %lld Hz", pulsePerSecond);
+    // G_LOGI("Freq: %lld Hz", pulsePerSecond);
     pcnt_counter_clear(PCNT_UNIT_0);
     _lastUpdate = esp_timer_get_time();
 
-    val = 0;
+    freqHz = pulsePerSecond;
     return G_OK;
 }

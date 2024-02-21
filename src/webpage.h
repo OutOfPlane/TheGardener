@@ -88,7 +88,7 @@ const char *webpageDataTable = R"EOF(
 <tr>
 <td>IO1</td>
 <td id="OUT1_v">-</td>
-<td id="IN1_v">-</td>
+<td id="IN1_f">-</td>
 </tr>
 <tr>
 <td>IO2</td>
@@ -157,8 +157,8 @@ const char *webpageDataTable = R"EOF(
 </tr>
 <tr>
 <td>S-UNIT</td>
-<td>ID</td>
 <td id="sunit_id">-</td>
+<td id="sAge_t">-</td>
 </tr>
 <tr>
 <td>CH0</td>
@@ -203,8 +203,12 @@ if(key.includes("_mA"))
 document.getElementById(key).innerHTML = (data[key]/1000.0).toFixed(3) + " A";
 if(key.includes("_mV"))
 document.getElementById(key).innerHTML = (data[key]/1000.0).toFixed(3) + " V";
+if(key.includes("_f"))
+document.getElementById(key).innerHTML = data[key] + " Hz";
 if(key.includes("_p"))
 document.getElementById(key).innerHTML = data[key] + " %";
+if(key.includes("_t"))
+document.getElementById(key).innerHTML = data[key] + " s";
 if(key.includes("_s"))
 document.getElementById(key).innerHTML = ["OFF", "ON"][data[key]];
 if(key.includes("_v"))

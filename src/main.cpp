@@ -20,6 +20,7 @@
 #include <sht40.hpp>
 #include <esp32nvs.hpp>
 #include <esp32freqCounter.hpp>
+#include <safePointer.hpp>
 
 #include "webpage.h"
 
@@ -29,6 +30,7 @@
 using namespace gardener;
 
 void main_task(void *pvParameter);
+void sensor_task(void *pvParameter);
 void updateSensorData();
 
 esp_err_t statusPageHandler(httpd_req_t *req);
@@ -69,10 +71,69 @@ extern "C" void app_main()
 }
 
 wifiAdapter adaptWiFi("WiFi", 10);
-enc28j60 adaptEth("Eth", 19, 23, 18, 5, 8, 2, global::enc28j60_RESET);
+enc28j60 adaptEth("Eth", 19, 23, 18, 5, 20, 2, global::enc28j60_RESET);
 char sensorDataBuff[1024];
+safePointer sensorDataPtr("sensData", sensorDataBuff);
 char sensorUnitBuff[200];
 esp32nvs configStore("nvs");
+
+// Sensor Values:
+int32_t vin, v3v3, v12va, ain0, ain1, ain2, ain3,
+    iaux1, iaux2, imot, ird, ign, ibl, iwh,
+    vrd, vgn, vbl, vwh, aout, mfwd, mrev, temper, humi;
+
+uint8_t sin2, sout1, sout2, saux1, saux2;
+int32_t sin1;
+int64_t lastSensorUnit = 0;
+
+void sensor_task(void *pvParameter)
+{
+    const char *_name = "sensor";
+    timeout sensorUpdateTimeout(1000, MILLISECONDS);
+    while (1)
+    {
+        /* code */
+        if (sensorUpdateTimeout.isEllapsed())
+        {
+            sensorUpdateTimeout.reset();
+            G_LOGI("UPDATE");
+            if (sensorDataPtr.lock(sensorDataPtr, 1000))
+            {
+                updateSensorData();
+                sensorDataPtr.unlock();
+            }
+
+            if (iaux1 > 95 && iaux1 < 110)
+            {
+                if (global::AUX1->lock(*global::AUX1, 100))
+                {
+                    global::AUX1->set(0);
+                    global::AUX1->unlock();
+                }
+            }
+            else
+            {
+                if (iaux1 > 130)
+                {
+                    if (global::AUX1->lock(*global::AUX1, 100))
+                    {
+                        global::AUX1->set(0);
+                        global::AUX1->unlock();
+                    }
+                }
+                else
+                {
+                    if (global::AUX1->lock(*global::AUX1, 100))
+                    {
+                        global::AUX1->set(1);
+                        global::AUX1->unlock();
+                    }
+                }
+            }
+        }
+        vTaskDelay(100 / portTICK_RATE_MS);
+    }
+}
 
 void main_task(void *pvParameter)
 {
@@ -93,7 +154,7 @@ void main_task(void *pvParameter)
             G_LOGI("DEV %02X is present", i);
         }
     }
-    
+
     TCA9534 myPortExpander("TCA9534", global::systemBus);
     ads7828 myADC("ADS7828", global::systemBus);
 
@@ -201,6 +262,7 @@ void main_task(void *pvParameter)
     uint16_t bufSz = 256;
     char outBuf[bufSz];
     strcpy(sensorUnitBuff, "{}");
+    xTaskCreate(&sensor_task, "sensor_task", 16384, NULL, 4, NULL);
 
     adaptWiFi.start();
 
@@ -274,9 +336,7 @@ void main_task(void *pvParameter)
 
     timeout waterTimeout(0, SECONDS);
     timeout requestTimeout(1000, SECONDS);
-
-    timeout updateFreqTimeout(1000, MILLISECONDS);
-
+    timeout telemetryTimeout(10, SECONDS);
     uint32_t aoutVolt = 0;
 
     while (1)
@@ -314,11 +374,29 @@ void main_task(void *pvParameter)
             }
         }
 
-        if (updateFreqTimeout.isEllapsed())
+        if (telemetryTimeout.isEllapsed())
         {
-            updateFreqTimeout.reset();
-            uint8_t val = 0;
-            global::IN1->get(val);
+            telemetryTimeout.reset();
+            char sensorTmp[1024];
+            sensorTmp[0] = 0;
+            if (sensorDataPtr.lock(sensorDataPtr, 1000))
+            {
+                strcpy(sensorTmp, sensorDataBuff);
+                sensorDataPtr.unlock();
+            }
+            if (sensorTmp[0])
+            {
+                if (myClient.postPrintf(sensorDataBuff, "https://api.graviplant-online.de/v1/telemetry/?sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
+                {
+                    G_LOGE("Telemetry post failed");
+                    global::LED_STAT_RDY->set(0);
+                }
+                else
+                {
+                    G_LOGI("Telemetry post success");
+                    global::LED_STAT_RDY->set(1);
+                }
+            }
         }
 
         if (requestTimeout.isEllapsed())
@@ -462,12 +540,6 @@ void updateSensorData()
     char tmpSSID[32];
     adaptWiFi.getSSID(tmpSSID);
 
-    int32_t vin, v3v3, v12va, ain0, ain1, ain2, ain3,
-        iaux1, iaux2, imot, ird, ign, ibl, iwh,
-        vrd, vgn, vbl, vwh, aout, mfwd, mrev, temper, humi;
-
-    uint8_t sin1, sin2, sout1, sout2, saux1, saux2;
-
     if (global::senseVIN->lock(*global::senseVIN, 100))
     {
         global::senseVIN->getVoltage(vin);
@@ -591,7 +663,7 @@ void updateSensorData()
 
     if (global::IN1->lock(*global::IN1, 100))
     {
-        global::IN1->get(sin1);
+        global::IN1->getFrequency(sin1);
         global::IN1->unlock();
     }
 
@@ -638,6 +710,9 @@ void updateSensorData()
         global::environmental->unlock();
     }
 
+    int64_t sensorAge = (esp_timer_get_time() - lastSensorUnit)/1000000;
+    int32_t sensorAge_t = sensorAge;
+
     sprintf(sensorDataBuff, R"EOF({
 "hwID":"%s",
 "wifissid":"%s",
@@ -662,7 +737,7 @@ void updateSensorData()
 "wh_p":%d,
 "OUT1_v":%d,
 "OUT2_v":%d,
-"IN1_v":%d,
+"IN1_f":%d,
 "IN2_v":%d,
 "AUX1_s":%d,
 "AUX2_s":%d,
@@ -672,6 +747,7 @@ void updateSensorData()
 "hum_r":%d,
 "fwvers":"%s",
 "fwfeat":"%s",
+"sAge_t":%d,
 "sunit":%s
 })EOF",
             global::systemInfo.hardware.hardwareID,
@@ -707,6 +783,7 @@ void updateSensorData()
             humi,
             getFirmwareStringLong(),
             __STR(G_CODE_FEATURE),
+            sensorAge_t,
             sensorUnitBuff);
 }
 
@@ -784,7 +861,7 @@ esp_err_t statusPageHandler(httpd_req_t *req)
         }
         // terminate buffer
         postBuff[recv_size] = '\0';
-        printf("%s\r\n", postBuff);
+        G_LOGI("%s\r\n", postBuff);
 
         // change = and & to whitespace
         char *content = postBuff;
@@ -796,7 +873,7 @@ esp_err_t statusPageHandler(httpd_req_t *req)
                 *content = ' ';
             content++;
         }
-        printf("%s\r\n", postBuff);
+        G_LOGI("%s\r\n", postBuff);
 
         char id[2];
         char val[256 * 2];
@@ -914,7 +991,6 @@ esp_err_t dataRequestHandler(httpd_req_t *req)
 
     httpd_resp_set_hdr(req, "Connection", "close");
     httpd_resp_set_hdr(req, "Content-Type", "application/json");
-    updateSensorData();
 
     httpd_resp_send_chunk(req, sensorDataBuff, HTTPD_RESP_USE_STRLEN);
 
@@ -954,9 +1030,9 @@ esp_err_t sensorUnitRequestHandler(httpd_req_t *req)
         }
         // terminate buffer
         postBuff[recv_size] = '\0';
-        printf("%s\r\n", postBuff);
+        G_LOGI("%s\r\n", postBuff);
         strlcpy(sensorUnitBuff, postBuff, sizeof(sensorUnitBuff));
-
+        lastSensorUnit = esp_timer_get_time();
     }
     httpd_resp_set_hdr(req, "Connection", "close");
     httpd_resp_send_chunk(req, nullptr, 0);

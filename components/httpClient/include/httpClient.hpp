@@ -13,6 +13,8 @@ namespace gardener
         virtual ~httpClient() {}
         g_err get(char *responseBuffer, uint16_t responseBufferSize, const char *requestUrl);
         g_err getPrintf(char *responseBuffer, uint16_t responseBufferSize, const char *requestUrl, ...);
+        g_err post(char *body, const char *requestUrl);
+        g_err postPrintf(char *body, const char *requestUrl, ...);
 
     protected:
     private:

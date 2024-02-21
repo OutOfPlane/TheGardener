@@ -135,3 +135,97 @@ g_err gardener::httpClient::getPrintf(char *responseBuffer, uint16_t responseBuf
     G_LOGI("Executing request: %s", tmpENC);
     return get(responseBuffer, responseBufferSize, tmpENC);
 }
+
+
+g_err gardener::httpClient::post(char *body, const char *requestUrl)
+{
+    int content_length = 0;
+    esp_http_client_set_url(_client, requestUrl);
+    esp_http_client_set_method(_client, HTTP_METHOD_POST);
+    uint16_t dataLen = strlen(body);
+    esp_err_t err = esp_http_client_open(_client, dataLen);
+    if (err != ESP_OK)
+    {
+        G_LOGE("Failed to open HTTP connection: %s", esp_err_to_name(err));
+        return G_ERR_NETWORK;
+    }
+    else
+    {
+        if(dataLen != esp_http_client_write(_client, body, dataLen))
+        {
+            G_LOGE("HTTP POST transfer failed");
+            esp_http_client_close(_client);
+            return G_ERR_TRANSFER_INTERRUPTED;
+        }
+        // content_length = esp_http_client_fetch_headers(_client);
+        // if (content_length < 0)
+        // {
+        //     G_LOGE("HTTP client fetch headers failed");
+        //     esp_http_client_close(_client);
+        //     return G_ERR_INVALID_RESPONSE;
+        // }
+        // else
+        // {
+        //     int data_read = esp_http_client_read_response(_client, responseBuffer, responseBufferSize);
+        //     if (data_read >= 0)
+        //     {
+        //         responseBuffer[data_read] = 0;
+        //         G_LOGI("HTTP GET Status = %d, content_length = %d",
+        //                esp_http_client_get_status_code(_client),
+        //                esp_http_client_get_content_length(_client));
+        //     }
+        //     else
+        //     {
+        //         responseBuffer[0] = 0;
+        //         G_LOGE("Failed to read response");
+        //         esp_http_client_close(_client);
+        //         return G_ERR_NO_DATA;
+        //     }
+        // }
+    }
+    esp_http_client_close(_client);
+
+    return G_OK;
+}
+
+g_err gardener::httpClient::postPrintf(char *body, const char *requestUrl, ...)
+{
+    char tmp[256];
+    va_list args;
+    va_start(args, requestUrl);
+    vsprintf(tmp, requestUrl, args);
+    va_end(args);
+    // urlencode the getPARAMs
+    char tmpENC[256];
+    char *tmpPtr = tmp;
+    char *tmpENCPtr = tmpENC;
+    uint8_t paramStart = 0;
+    while (*tmpPtr)
+    {
+        if(*tmpPtr == 0x1B)
+            break;
+        *tmpENCPtr = *tmpPtr;
+        if (paramStart)
+        {
+            if(*tmpPtr == '=')
+                *tmpENCPtr = *tmpPtr;
+            else if(*tmpPtr == '&')
+                *tmpENCPtr = *tmpPtr;
+            else if(isalnum(*tmpPtr) == 0)
+            {
+                *tmpENCPtr = '%';
+                tmpENCPtr++;
+                *tmpENCPtr = hexChars[((*tmpPtr) >> 4) & 0xF];
+                tmpENCPtr++;
+                *tmpENCPtr = hexChars[((*tmpPtr) >> 0) & 0xF];
+            }
+        }
+        if (*tmpPtr == '?')
+            paramStart = 1;
+        tmpPtr++;
+        tmpENCPtr++;
+    }
+    *tmpENCPtr = '\0';
+    G_LOGI("Executing request: %s", tmpENC);
+    return post(body, tmpENC);
+}

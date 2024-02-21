@@ -1,0 +1,1 @@
+idf_component_register(SRCS "src/safePointer.cpp" INCLUDE_DIRS "include" REQUIRES gardenObject)
