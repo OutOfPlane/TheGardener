@@ -157,31 +157,34 @@ g_err gardener::httpClient::post(char *body, const char *requestUrl)
             esp_http_client_close(_client);
             return G_ERR_TRANSFER_INTERRUPTED;
         }
-        // content_length = esp_http_client_fetch_headers(_client);
-        // if (content_length < 0)
-        // {
-        //     G_LOGE("HTTP client fetch headers failed");
-        //     esp_http_client_close(_client);
-        //     return G_ERR_INVALID_RESPONSE;
-        // }
-        // else
-        // {
-        //     int data_read = esp_http_client_read_response(_client, responseBuffer, responseBufferSize);
-        //     if (data_read >= 0)
-        //     {
-        //         responseBuffer[data_read] = 0;
-        //         G_LOGI("HTTP GET Status = %d, content_length = %d",
-        //                esp_http_client_get_status_code(_client),
-        //                esp_http_client_get_content_length(_client));
-        //     }
-        //     else
-        //     {
-        //         responseBuffer[0] = 0;
-        //         G_LOGE("Failed to read response");
-        //         esp_http_client_close(_client);
-        //         return G_ERR_NO_DATA;
-        //     }
-        // }
+
+        content_length = esp_http_client_fetch_headers(_client);
+        if (content_length < 0)
+        {
+            G_LOGE("HTTP client fetch headers failed");
+            esp_http_client_close(_client);
+            return G_ERR_INVALID_RESPONSE;
+        }
+        else
+        {
+            char tmp[512];
+            int data_read = esp_http_client_read_response(_client, tmp, 512);
+            if (data_read >= 0)
+            {
+                tmp[data_read] = 0;
+                G_LOGI("HTTP GET Status = %d, content_length = %d",
+                       esp_http_client_get_status_code(_client),
+                       esp_http_client_get_content_length(_client));
+                G_LOGI("data: %s", tmp);
+            }
+            else
+            {
+                tmp[0] = 0;
+                G_LOGE("Failed to read response");
+                esp_http_client_close(_client);
+                return G_ERR_NO_DATA;
+            }
+        }
     }
     esp_http_client_close(_client);
 

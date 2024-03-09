@@ -47,7 +47,7 @@ int webLogHandler(const char *pattern, va_list lst)
         {
             char msg[512];
             vsprintf(msg, pattern + 9, lst);
-            if (errClient.getPrintf(msg, 511, "https://api.graviplant-online.de/v1/reportError/?sn=%s&msg=%s",
+            if (errClient.getPrintf(msg, 511, "https://monitor.graviplant-online.de/api/v1/gp/?action=err&sn=%s&msg=%s",
                                     global::systemInfo.hardware.hardwareID,
                                     msg) == G_OK)
                 printf("*");
@@ -69,13 +69,12 @@ extern "C" void app_main()
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     xTaskCreate(&main_task, "main_task", 16384, NULL, 5, NULL);
 }
-
+esp32nvs configStore("nvs");
 wifiAdapter adaptWiFi("WiFi", 10);
 enc28j60 adaptEth("Eth", 19, 23, 18, 5, 20, 2, global::enc28j60_RESET);
-char sensorDataBuff[1024];
+char sensorDataBuff[2048];
 safePointer sensorDataPtr("sensData", sensorDataBuff);
 char sensorUnitBuff[200];
-esp32nvs configStore("nvs");
 
 // Sensor Values:
 int32_t vin, v3v3, v12va, ain0, ain1, ain2, ain3,
@@ -89,21 +88,21 @@ int64_t lastSensorUnit = 0;
 void sensor_task(void *pvParameter)
 {
     const char *_name = "sensor";
-    timeout sensorUpdateTimeout(1000, MILLISECONDS);
+    timeout sensorUpdateTimeout(2000, MILLISECONDS);
     while (1)
     {
         /* code */
         if (sensorUpdateTimeout.isEllapsed())
         {
             sensorUpdateTimeout.reset();
-            G_LOGI("UPDATE");
+            // G_LOGI("UPDATE");
             if (sensorDataPtr.lock(sensorDataPtr, 1000))
             {
                 updateSensorData();
                 sensorDataPtr.unlock();
             }
 
-            if (iaux1 > 95 && iaux1 < 110)
+            if (iaux1 > 100 && iaux1 < 120)
             {
                 if (global::AUX1->lock(*global::AUX1, 100))
                 {
@@ -334,9 +333,9 @@ void main_task(void *pvParameter)
 
     esp_log_set_vprintf(webLogHandler);
 
-    timeout waterTimeout(0, SECONDS);
-    timeout requestTimeout(1000, SECONDS);
-    timeout telemetryTimeout(10, SECONDS);
+    timeout waterTimeout(10, SECONDS);
+    timeout requestTimeout(60, SECONDS);
+    timeout telemetryTimeout(60*5, SECONDS);
     uint32_t aoutVolt = 0;
 
     while (1)
@@ -377,7 +376,7 @@ void main_task(void *pvParameter)
         if (telemetryTimeout.isEllapsed())
         {
             telemetryTimeout.reset();
-            char sensorTmp[1024];
+            char sensorTmp[2048];
             sensorTmp[0] = 0;
             if (sensorDataPtr.lock(sensorDataPtr, 1000))
             {
@@ -386,7 +385,7 @@ void main_task(void *pvParameter)
             }
             if (sensorTmp[0])
             {
-                if (myClient.postPrintf(sensorDataBuff, "https://api.graviplant-online.de/v1/telemetry/?sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
+                if (myClient.postPrintf(sensorTmp, "https://monitor.graviplant-online.de/api/v1/gp/?action=add&sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
                 {
                     G_LOGE("Telemetry post failed");
                     global::LED_STAT_RDY->set(0);
@@ -401,130 +400,125 @@ void main_task(void *pvParameter)
 
         if (requestTimeout.isEllapsed())
         {
+            int32_t motorPower = 0;
+            int32_t waterDuration = 0;
+            int32_t light_r = 0, light_g = 0, light_b = 0, light_w = 0;
             requestTimeout.reset();
-
-            int32_t gn, rd, bl, wh;
-            if (myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/light/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID) != G_OK)
+            if (myClient.getPrintf(outBuf, bufSz, "https://monitor.graviplant-online.de/api/v1/gp/?action=task&sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
             {
                 global::LED_STAT_RDY->set(0);
             }
+            char task_cmd[20];
+            if (sscanf(outBuf, "%s", task_cmd) != 1)
+            {
+                G_LOGI("NO Task Pending");
+            }
             else
             {
-                if (sscanf(outBuf, "%d %d %d %d", &rd, &gn, &bl, &wh) != 4)
-                {
-                    if (sscanf(outBuf, "%d", &rd) == 1)
-                    {
-                        G_LOGI("No LIGHT pending");
-                        global::LED_STAT_RDY->set(1);
-                    }
-                    else
-                    {
-                        G_LOGE("Invalid light format: %s", outBuf);
-                    }
-                }
-                else
-                {
-                    if (global::LED_RD->lock(*global::LED_RD, 100))
-                    {
-                        global::LED_RD->setVoltage(rd * 33);
-                        global::LED_RD->unlock();
-                    }
-                    if (global::LED_GN->lock(*global::LED_GN, 100))
-                    {
-                        global::LED_GN->setVoltage(gn * 33);
-                        global::LED_GN->unlock();
-                    }
-                    if (global::LED_BL->lock(*global::LED_BL, 100))
-                    {
-                        global::LED_BL->setVoltage(bl * 33);
-                        global::LED_BL->unlock();
-                    }
-                    if (global::LED_WH->lock(*global::LED_WH, 100))
-                    {
-                        global::LED_WH->setVoltage(wh * 33);
-                        global::LED_WH->unlock();
-                    }
-                }
-            }
+                G_LOGI("Got task: %s", outBuf);
 
-            char waterCMD;
-            int32_t val;
-            myClient.getPrintf(outBuf, bufSz, "https://api.graviplant-online.de/v1/water/?sn=%s&AUTOCOMPLETED=true", global::systemInfo.hardware.hardwareID);
-            if (sscanf(outBuf, "%c %d", &waterCMD, &val) != 2)
-            {
-                if (sscanf(outBuf, "%d", &val) == 1)
+                switch (task_cmd[0])
                 {
-                    G_LOGI("No WATER pending");
-                }
-                else
-                {
-                    G_LOGE("Invalid water format: %s", outBuf);
-                }
-            }
-            else
-            {
-                if (waterCMD == 'a')
-                {
-                    if (global::AOUT->lock(*global::AOUT, 100))
+                case 'L':
+                    //Lights
+                    if (sscanf(outBuf, "%s %d %d %d %d", task_cmd, &light_r, &light_g, &light_b, &light_w) != 5)
                     {
-                        global::AOUT->setVoltage((val * 33) / 100);
-                        global::AOUT->unlock();
-                    }
-                }
-                else if (waterCMD == 'm')
-                {
-                    if (val > 0)
-                    {
-                        if (global::MOT_REV->lock(*global::MOT_REV, 100))
+                        G_LOGE("Invalid Light %s", outBuf);
+                    }else{
+                        if (global::LED_RD->lock(*global::LED_RD, 100))
                         {
-                            global::MOT_REV->setVoltage(3300);
-                            global::MOT_REV->unlock();
+                            global::LED_RD->setVoltage(light_r * 33);
+                            global::LED_RD->unlock();
                         }
-                        if (global::MOT_FWD->lock(*global::MOT_FWD, 100))
+                        if (global::LED_GN->lock(*global::LED_GN, 100))
                         {
-                            global::MOT_FWD->setVoltage(3300 - (val * 33));
-                            global::MOT_FWD->unlock();
+                            global::LED_GN->setVoltage(light_g * 33);
+                            global::LED_GN->unlock();
+                        }
+                        if (global::LED_BL->lock(*global::LED_BL, 100))
+                        {
+                            global::LED_BL->setVoltage(light_b * 33);
+                            global::LED_BL->unlock();
+                        }
+                        if (global::LED_WH->lock(*global::LED_WH, 100))
+                        {
+                            global::LED_WH->setVoltage(light_w * 33);
+                            global::LED_WH->unlock();
                         }
                     }
-                    else
+                    break;
+
+                case 'W':
+                    //Water
+                    if (sscanf(outBuf, "%s %d", task_cmd, &waterDuration) != 2)
                     {
-                        if (global::MOT_FWD->lock(*global::MOT_FWD, 100))
-                        {
-                            global::MOT_FWD->setVoltage(3300);
-                            global::MOT_FWD->unlock();
-                        }
-                        if (global::MOT_REV->lock(*global::MOT_REV, 100))
-                        {
-                            global::MOT_REV->setVoltage(3300 - (-val * 33));
-                            global::MOT_REV->unlock();
+                        G_LOGE("Invalid Water %s", outBuf);
+                    }else{
+                        if(waterDuration > 0 && waterDuration <= 120){
+                            if (global::AUX2->lock(*global::AUX2, 500))
+                            {
+                                global::AUX2->set(1);
+                                global::AUX2->unlock();
+                            }
+                            waterTimeout.setPeriod(waterDuration, SECONDS);
+                            waterTimeout.reset();
                         }
                     }
-                }
-                else if (waterCMD == 'w')
-                {
-                    if (global::AUX2->lock(*global::AUX2, 100))
+                    break;
+
+                case 'M':
+                    //Motor
+                    if (sscanf(outBuf, "%s %d", task_cmd, &motorPower) != 2)
                     {
-                        global::AUX2->set(1);
-                        global::AUX2->unlock();
+                        G_LOGE("Invalid motor %s", outBuf);
+                    }else{
+                        if(motorPower >= 0 && motorPower <= 100){
+                            if(!motorPower){
+                                if (global::AOUT->lock(*global::AOUT, 100))
+                                {
+                                    global::AOUT->setVoltage(0);
+                                    global::AOUT->unlock();
+                                    global::OUT1->set(0);
+                                }else{
+                                    G_LOGE("Couldnt aquire motor");
+                                }
+                            }else{
+                                if (global::AOUT->lock(*global::AOUT, 100))
+                                {
+                                    global::AOUT->setVoltage(motorPower * 33);
+                                    global::AOUT->unlock();
+                                }else{
+                                    G_LOGE("Couldnt aquire motor");
+                                }
+                            }                            
+                        }
                     }
-                    waterTimeout.setPeriod(val, SECONDS);
-                    waterTimeout.reset();
+                    break;
+                
+                default:
+                    break;
                 }
-                else
-                {
-                    G_LOGE("Invalid water command: %s", outBuf);
-                }
+
             }
         }
 
         if (waterTimeout.isEllapsed())
         {
+            waterTimeout.reset();
             if (global::AUX2->lock(*global::AUX2, 100))
             {
                 global::AUX2->set(0);
                 global::AUX2->unlock();
             }
         }
+
+        if(!sin2){
+            vTaskDelay(500 / portTICK_RATE_MS);
+            global::OUT1->set(0);
+            vTaskDelay(500 / portTICK_RATE_MS);
+            global::OUT1->set(1);
+        }
+        global::IN2->unlock();
 
         vTaskDelay(100 / portTICK_RATE_MS);
         if (global::LED_STAT_ERR->lock(*global::LED_STAT_ERR, 100))
@@ -535,182 +529,202 @@ void main_task(void *pvParameter)
     }
 }
 
+#define SENS_LCK_TIMEOUT 500
+
 void updateSensorData()
 {
+    const char *_name = "sensTask";
     char tmpSSID[32];
     adaptWiFi.getSSID(tmpSSID);
 
-    if (global::senseVIN->lock(*global::senseVIN, 100))
+    int32_t val_tmp = 0;
+
+    if (global::senseVIN->lock(*global::senseVIN, SENS_LCK_TIMEOUT))
     {
-        global::senseVIN->getVoltage(vin);
+        if (global::senseVIN->getVoltage(val_tmp) == G_OK)
+            vin = val_tmp;
         global::senseVIN->unlock();
+        // G_LOGI("Vin is :%d", vin);
     }
 
-    if (global::sense3V3->lock(*global::sense3V3, 100))
+    if (global::sense3V3->lock(*global::sense3V3, SENS_LCK_TIMEOUT))
     {
-        global::sense3V3->getVoltage(v3v3);
+        if (global::sense3V3->getVoltage(val_tmp) == G_OK)
+            v3v3 = val_tmp;
         global::sense3V3->unlock();
     }
 
-    if (global::sense12VA->lock(*global::sense12VA, 100))
+    if (global::sense12VA->lock(*global::sense12VA, SENS_LCK_TIMEOUT))
     {
-        global::sense12VA->getVoltage(v12va);
+        if (global::sense12VA->getVoltage(val_tmp) == G_OK)
+            v12va = val_tmp;
         global::sense12VA->unlock();
     }
 
-    if (global::iSense_AUX1->lock(*global::iSense_AUX1, 100))
+    if (global::iSense_AUX1->lock(*global::iSense_AUX1, SENS_LCK_TIMEOUT))
     {
-        global::iSense_AUX1->getVoltage(iaux1);
+        if (global::iSense_AUX1->getVoltage(val_tmp) == G_OK)
+            iaux1 = val_tmp;
         global::iSense_AUX1->unlock();
         iaux1 = iaux1 * 606 / 1000;
     }
 
-    if (global::iSense_AUX2->lock(*global::iSense_AUX2, 100))
+    if (global::iSense_AUX2->lock(*global::iSense_AUX2, SENS_LCK_TIMEOUT))
     {
-        global::iSense_AUX2->getVoltage(iaux2);
+        if (global::iSense_AUX2->getVoltage(val_tmp) == G_OK)
+            iaux2 = val_tmp;
         global::iSense_AUX2->unlock();
         iaux2 = iaux2 * 606 / 1000;
     }
 
-    if (global::iSense_MOT->lock(*global::iSense_MOT, 100))
+    if (global::iSense_MOT->lock(*global::iSense_MOT, SENS_LCK_TIMEOUT))
     {
-        global::iSense_MOT->getVoltage(imot);
+        if (global::iSense_MOT->getVoltage(val_tmp) == G_OK)
+            imot = val_tmp;
         global::iSense_MOT->unlock();
         imot = imot * 606 / 1000;
     }
 
-    if (global::iSense_LED_RD->lock(*global::iSense_LED_RD, 100))
+    if (global::iSense_LED_RD->lock(*global::iSense_LED_RD, SENS_LCK_TIMEOUT))
     {
-        global::iSense_LED_RD->getVoltage(ird);
+        if (global::iSense_LED_RD->getVoltage(val_tmp) == G_OK)
+            ird = val_tmp;
         global::iSense_LED_RD->unlock();
         ird = ird * 606 / 1000;
     }
 
-    if (global::iSense_LED_GN->lock(*global::iSense_LED_GN, 100))
+    if (global::iSense_LED_GN->lock(*global::iSense_LED_GN, SENS_LCK_TIMEOUT))
     {
-        global::iSense_LED_GN->getVoltage(ign);
+        if (global::iSense_LED_GN->getVoltage(val_tmp) == G_OK)
+            ign = val_tmp;
         global::iSense_LED_GN->unlock();
         ign = ign * 606 / 1000;
     }
 
-    if (global::iSense_LED_BL->lock(*global::iSense_LED_BL, 100))
+    if (global::iSense_LED_BL->lock(*global::iSense_LED_BL, SENS_LCK_TIMEOUT))
     {
-        global::iSense_LED_BL->getVoltage(ibl);
+        if (global::iSense_LED_BL->getVoltage(val_tmp) == G_OK)
+            ibl = val_tmp;
         global::iSense_LED_BL->unlock();
         ibl = ibl * 606 / 1000;
     }
 
-    if (global::iSense_LED_WH->lock(*global::iSense_LED_WH, 100))
+    if (global::iSense_LED_WH->lock(*global::iSense_LED_WH, SENS_LCK_TIMEOUT))
     {
-        global::iSense_LED_WH->getVoltage(iwh);
+        if (global::iSense_LED_WH->getVoltage(val_tmp) == G_OK)
+            iwh = val_tmp;
         global::iSense_LED_WH->unlock();
         iwh = iwh * 606 / 1000;
     }
 
-    if (global::LED_RD->lock(*global::LED_RD, 100))
+    if (global::LED_RD->lock(*global::LED_RD, SENS_LCK_TIMEOUT))
     {
         global::LED_RD->getVoltage(vrd);
         global::LED_RD->unlock();
     }
-    if (global::LED_GN->lock(*global::LED_GN, 100))
+    if (global::LED_GN->lock(*global::LED_GN, SENS_LCK_TIMEOUT))
     {
         global::LED_GN->getVoltage(vgn);
         global::LED_GN->unlock();
     }
-    if (global::LED_BL->lock(*global::LED_BL, 100))
+    if (global::LED_BL->lock(*global::LED_BL, SENS_LCK_TIMEOUT))
     {
         global::LED_BL->getVoltage(vbl);
         global::LED_BL->unlock();
     }
-    if (global::LED_WH->lock(*global::LED_WH, 100))
+    if (global::LED_WH->lock(*global::LED_WH, SENS_LCK_TIMEOUT))
     {
         global::LED_WH->getVoltage(vwh);
         global::LED_WH->unlock();
     }
 
-    if (global::AIN0->lock(*global::AIN0, 100))
+    if (global::AIN0->lock(*global::AIN0, SENS_LCK_TIMEOUT))
     {
-        global::AIN0->getVoltage(ain0);
+        if (global::AIN0->getVoltage(val_tmp) == G_OK)
+            ain0 = val_tmp;
         global::AIN0->unlock();
     }
-    if (global::AIN1->lock(*global::AIN1, 100))
+    if (global::AIN1->lock(*global::AIN1, SENS_LCK_TIMEOUT))
     {
-        global::AIN1->getVoltage(ain1);
+        if (global::AIN1->getVoltage(val_tmp) == G_OK)
+            ain1 = val_tmp;
         global::AIN1->unlock();
     }
-    if (global::AIN2->lock(*global::AIN2, 100))
+    if (global::AIN2->lock(*global::AIN2, SENS_LCK_TIMEOUT))
     {
-        global::AIN2->getVoltage(ain2);
+        if (global::AIN2->getVoltage(val_tmp) == G_OK)
+            ain2 = val_tmp;
         global::AIN2->unlock();
     }
-    if (global::AIN3->lock(*global::AIN3, 100))
+    if (global::AIN3->lock(*global::AIN3, SENS_LCK_TIMEOUT))
     {
-        global::AIN3->getVoltage(ain3);
+        if (global::AIN3->getVoltage(val_tmp) == G_OK)
+            ain3 = val_tmp;
         global::AIN3->unlock();
     }
 
-    if (global::OUT1->lock(*global::OUT1, 100))
+    if (global::OUT1->lock(*global::OUT1, SENS_LCK_TIMEOUT))
     {
         global::OUT1->get(sout1);
         global::OUT1->unlock();
     }
 
-    if (global::OUT2->lock(*global::OUT2, 100))
+    if (global::OUT2->lock(*global::OUT2, SENS_LCK_TIMEOUT))
     {
         global::OUT2->get(sout2);
         global::OUT2->unlock();
     }
 
-    if (global::IN1->lock(*global::IN1, 100))
+    if (global::IN1->lock(*global::IN1, SENS_LCK_TIMEOUT))
     {
         global::IN1->getFrequency(sin1);
         global::IN1->unlock();
     }
 
-    if (global::IN2->lock(*global::IN2, 100))
+    if (global::IN2->lock(*global::IN2, SENS_LCK_TIMEOUT))
     {
         global::IN2->get(sin2);
         global::IN2->unlock();
     }
 
-    if (global::AUX1->lock(*global::AUX1, 100))
+    if (global::AUX1->lock(*global::AUX1, SENS_LCK_TIMEOUT))
     {
         global::AUX1->get(saux1);
         global::AUX1->unlock();
     }
 
-    if (global::AUX2->lock(*global::AUX2, 100))
+    if (global::AUX2->lock(*global::AUX2, SENS_LCK_TIMEOUT))
     {
         global::AUX2->get(saux2);
         global::AUX2->unlock();
     }
 
-    if (global::AOUT->lock(*global::AOUT, 100))
+    if (global::AOUT->lock(*global::AOUT, SENS_LCK_TIMEOUT))
     {
         global::AOUT->getVoltage(aout);
         global::AOUT->unlock();
     }
 
-    if (global::MOT_FWD->lock(*global::MOT_FWD, 100))
+    if (global::MOT_FWD->lock(*global::MOT_FWD, SENS_LCK_TIMEOUT))
     {
         global::MOT_FWD->getVoltage(mfwd);
         global::MOT_FWD->unlock();
     }
 
-    if (global::MOT_REV->lock(*global::MOT_REV, 100))
+    if (global::MOT_REV->lock(*global::MOT_REV, SENS_LCK_TIMEOUT))
     {
         global::MOT_REV->getVoltage(mrev);
         global::MOT_REV->unlock();
     }
 
-    if (global::environmental->lock(*global::environmental, 100))
+    if (global::environmental->lock(*global::environmental, SENS_LCK_TIMEOUT))
     {
         global::environmental->getHumidity(humi);
         global::environmental->getTemperature(temper);
         global::environmental->unlock();
     }
 
-    int64_t sensorAge = (esp_timer_get_time() - lastSensorUnit)/1000000;
+    int64_t sensorAge = (esp_timer_get_time() - lastSensorUnit) / 1000000;
     int32_t sensorAge_t = sensorAge;
 
     sprintf(sensorDataBuff, R"EOF({

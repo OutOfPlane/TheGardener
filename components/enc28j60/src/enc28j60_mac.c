@@ -730,7 +730,7 @@ static void emac_enc28j60_task(void *arg)
 
     while (1) {
 loop_start:
-        vTaskDelay(100);
+        vTaskDelay(10);
         // block until some task notifies me or check the gpio by myself
         // if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000)) == 0 &&    // if no notification ...
         //     gpio_get_level(emac->int_gpio_num) != 0) {               // ...and no interrupt asserted

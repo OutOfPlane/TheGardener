@@ -27,7 +27,7 @@ g_err gardener::ads7828::selectChannel(uint16_t channel)
 
 g_err gardener::ads7828::read(int32_t &value_mV)
 {
-    if (_port->lock(*this))
+    if (_port->lock(*this, 200))
     {
         uint8_t buf[2];
         g_err erg = _port->r(DEV_ADDR, buf, sizeof(buf));

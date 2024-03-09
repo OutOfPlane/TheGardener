@@ -77,6 +77,7 @@ g_err captivePortal::start()
     G_LOGI("Starting HTTP Server...");
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.stack_size = 8192;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.lru_purge_enable = true;
 
