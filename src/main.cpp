@@ -84,11 +84,16 @@ int32_t vin, v3v3, v12va, ain0, ain1, ain2, ain3,
 uint8_t sin2, sout1, sout2, saux1, saux2;
 int32_t sin1;
 int64_t lastSensorUnit = 0;
+int64_t lastReset = 0;
+uint8_t sensor_cycle_state = 0;
+#define SENSOR_MISSING 0
+#define SENSOR_TRIGGER 1
+#define SENSOR_POWERED 2
 
 void sensor_task(void *pvParameter)
 {
     const char *_name = "sensor";
-    timeout sensorUpdateTimeout(2000, MILLISECONDS);
+    timeout sensorUpdateTimeout(500, MILLISECONDS);
     while (1)
     {
         /* code */
@@ -102,33 +107,57 @@ void sensor_task(void *pvParameter)
                 sensorDataPtr.unlock();
             }
 
-            if (iaux1 > 100 && iaux1 < 120)
+            switch (sensor_cycle_state)
             {
-                if (global::AUX1->lock(*global::AUX1, 100))
+            case SENSOR_MISSING:
+                if(iaux1 > 105)
                 {
-                    global::AUX1->set(0);
-                    global::AUX1->unlock();
-                }
-            }
-            else
-            {
-                if (iaux1 > 130)
-                {
-                    if (global::AUX1->lock(*global::AUX1, 100))
+                    sensor_cycle_state = SENSOR_TRIGGER;
+                    lastReset = esp_timer_get_time();
+                    if (global::AUX1->lock(*global::AUX1, 500))
                     {
                         global::AUX1->set(0);
                         global::AUX1->unlock();
+
                     }
                 }
-                else
+                break;
+            
+            case SENSOR_TRIGGER:
+                if(esp_timer_get_time() - lastReset > 5000000)
                 {
-                    if (global::AUX1->lock(*global::AUX1, 100))
+                    sensor_cycle_state = SENSOR_POWERED;
+                    lastReset = esp_timer_get_time();
+                    if (global::AUX1->lock(*global::AUX1, 500))
                     {
                         global::AUX1->set(1);
                         global::AUX1->unlock();
                     }
                 }
+                break;
+
+            case SENSOR_POWERED:
+                if(iaux1 > 150)
+                {
+                    if (global::AUX1->lock(*global::AUX1, 500))
+                    {
+                        global::AUX1->set(0);
+                        vTaskDelay(200/portTICK_PERIOD_MS);
+                        global::AUX1->set(1);
+                        global::AUX1->unlock();
+
+                    }
+                }
+                if(esp_timer_get_time() - lastReset > 10000000)
+                {
+                    sensor_cycle_state = SENSOR_MISSING;
+                }
+                break;
+            
+            default:
+                break;
             }
+
         }
         vTaskDelay(100 / portTICK_RATE_MS);
     }
@@ -338,6 +367,8 @@ void main_task(void *pvParameter)
     timeout telemetryTimeout(60*5, SECONDS);
     uint32_t aoutVolt = 0;
 
+    global::AOUT->setVoltage(24 * 33);
+    global::OUT1->set(1);
     while (1)
     {
         int chr = getchar();
@@ -487,6 +518,7 @@ void main_task(void *pvParameter)
                                 {
                                     global::AOUT->setVoltage(motorPower * 33);
                                     global::AOUT->unlock();
+                                    global::OUT1->set(1);
                                 }else{
                                     G_LOGE("Couldnt aquire motor");
                                 }
@@ -1045,7 +1077,12 @@ esp_err_t sensorUnitRequestHandler(httpd_req_t *req)
         // terminate buffer
         postBuff[recv_size] = '\0';
         G_LOGI("%s\r\n", postBuff);
-        strlcpy(sensorUnitBuff, postBuff, sizeof(sensorUnitBuff));
+
+        //only accept first message as valid
+        if(esp_timer_get_time() - lastSensorUnit > 30000000)
+        {
+            strlcpy(sensorUnitBuff, postBuff, sizeof(sensorUnitBuff));
+        }
         lastSensorUnit = esp_timer_get_time();
     }
     httpd_resp_set_hdr(req, "Connection", "close");
