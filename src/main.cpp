@@ -89,11 +89,13 @@ uint8_t sensor_cycle_state = 0;
 #define SENSOR_MISSING 0
 #define SENSOR_TRIGGER 1
 #define SENSOR_POWERED 2
+#define SENSOR_WAIT_MISSING 3
 
 void sensor_task(void *pvParameter)
 {
     const char *_name = "sensor";
     timeout sensorUpdateTimeout(500, MILLISECONDS);
+    uint8_t motor_run = 1;
     while (1)
     {
         /* code */
@@ -106,26 +108,25 @@ void sensor_task(void *pvParameter)
                 updateSensorData();
                 sensorDataPtr.unlock();
             }
+            G_LOGI("AIN2 is %d", ain2);
+            G_LOGI("IAUX1 is %d mA", iaux1);
 
             switch (sensor_cycle_state)
             {
             case SENSOR_MISSING:
-                if(iaux1 > 105)
+                if (ain2 > 3100)
                 {
+                    G_LOGI("SENSOR TRIGGERED");
                     sensor_cycle_state = SENSOR_TRIGGER;
                     lastReset = esp_timer_get_time();
-                    if (global::AUX1->lock(*global::AUX1, 500))
-                    {
-                        global::AUX1->set(0);
-                        global::AUX1->unlock();
-
-                    }
+                    motor_run = 0;
                 }
                 break;
-            
+
             case SENSOR_TRIGGER:
-                if(esp_timer_get_time() - lastReset > 5000000)
+                if (esp_timer_get_time() - lastReset > 500000)
                 {
+                    G_LOGI("SENSOR POWERED");
                     sensor_cycle_state = SENSOR_POWERED;
                     lastReset = esp_timer_get_time();
                     if (global::AUX1->lock(*global::AUX1, 500))
@@ -137,28 +138,46 @@ void sensor_task(void *pvParameter)
                 break;
 
             case SENSOR_POWERED:
-                if(iaux1 > 150)
+                if (esp_timer_get_time() - lastReset > 10000000ul)
                 {
+                    G_LOGI("SENSOR WAIT PASSED");
+                    sensor_cycle_state = SENSOR_WAIT_MISSING;
                     if (global::AUX1->lock(*global::AUX1, 500))
                     {
                         global::AUX1->set(0);
-                        vTaskDelay(200/portTICK_PERIOD_MS);
-                        global::AUX1->set(1);
                         global::AUX1->unlock();
-
                     }
+                    motor_run = 1;
                 }
-                if(esp_timer_get_time() - lastReset > 10000000)
+                break;
+
+            case SENSOR_WAIT_MISSING:
+                if (ain2 < 2800)
                 {
+                    G_LOGI("SENSOR PASSED");
                     sensor_cycle_state = SENSOR_MISSING;
                 }
                 break;
-            
             default:
                 break;
             }
 
+            if (motor_run)
+            {
+                // if (!sin2)
+                // {
+                //     vTaskDelay(500 / portTICK_RATE_MS);
+                //     global::OUT1->set(0);
+                //     vTaskDelay(500 / portTICK_RATE_MS);
+                global::OUT1->set(1);
+                // }
+            }
+            else
+            {
+                global::OUT1->set(0);
+            }
         }
+
         vTaskDelay(100 / portTICK_RATE_MS);
     }
 }
@@ -277,7 +296,7 @@ void main_task(void *pvParameter)
     global::MOT_FWD->mode(PIN_OUTPUT_PWM);
     global::MOT_REV->mode(PIN_OUTPUT_PWM);
 
-    global::AUX1->set(1);
+    global::AUX1->set(0);
     global::AUX2->set(0);
     global::LED_STAT_RDY->set(0);
     global::LED_STAT_STA->set(0);
@@ -364,10 +383,11 @@ void main_task(void *pvParameter)
 
     timeout waterTimeout(10, SECONDS);
     timeout requestTimeout(60, SECONDS);
-    timeout telemetryTimeout(60*5, SECONDS);
+    timeout telemetryTimeout(60 * 5, SECONDS);
+    timeout wifiTimeout(2, MINUTES);
     uint32_t aoutVolt = 0;
 
-    global::AOUT->setVoltage(24 * 33);
+    global::AOUT->setVoltage(28 * 33);
     global::OUT1->set(1);
     while (1)
     {
@@ -435,102 +455,120 @@ void main_task(void *pvParameter)
             int32_t waterDuration = 0;
             int32_t light_r = 0, light_g = 0, light_b = 0, light_w = 0;
             requestTimeout.reset();
+            outBuf[0] = 0;
             if (myClient.getPrintf(outBuf, bufSz, "https://monitor.graviplant-online.de/api/v1/gp/?action=task&sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
             {
                 global::LED_STAT_RDY->set(0);
             }
-            char task_cmd[20];
-            if (sscanf(outBuf, "%s", task_cmd) != 1)
-            {
-                G_LOGI("NO Task Pending");
-            }
             else
             {
-                G_LOGI("Got task: %s", outBuf);
-
-                switch (task_cmd[0])
+                char task_cmd[20];
+                if (sscanf(outBuf, "%s", task_cmd) != 1)
                 {
-                case 'L':
-                    //Lights
-                    if (sscanf(outBuf, "%s %d %d %d %d", task_cmd, &light_r, &light_g, &light_b, &light_w) != 5)
-                    {
-                        G_LOGE("Invalid Light %s", outBuf);
-                    }else{
-                        if (global::LED_RD->lock(*global::LED_RD, 100))
-                        {
-                            global::LED_RD->setVoltage(light_r * 33);
-                            global::LED_RD->unlock();
-                        }
-                        if (global::LED_GN->lock(*global::LED_GN, 100))
-                        {
-                            global::LED_GN->setVoltage(light_g * 33);
-                            global::LED_GN->unlock();
-                        }
-                        if (global::LED_BL->lock(*global::LED_BL, 100))
-                        {
-                            global::LED_BL->setVoltage(light_b * 33);
-                            global::LED_BL->unlock();
-                        }
-                        if (global::LED_WH->lock(*global::LED_WH, 100))
-                        {
-                            global::LED_WH->setVoltage(light_w * 33);
-                            global::LED_WH->unlock();
-                        }
-                    }
-                    break;
-
-                case 'W':
-                    //Water
-                    if (sscanf(outBuf, "%s %d", task_cmd, &waterDuration) != 2)
-                    {
-                        G_LOGE("Invalid Water %s", outBuf);
-                    }else{
-                        if(waterDuration > 0 && waterDuration <= 120){
-                            if (global::AUX2->lock(*global::AUX2, 500))
-                            {
-                                global::AUX2->set(1);
-                                global::AUX2->unlock();
-                            }
-                            waterTimeout.setPeriod(waterDuration, SECONDS);
-                            waterTimeout.reset();
-                        }
-                    }
-                    break;
-
-                case 'M':
-                    //Motor
-                    if (sscanf(outBuf, "%s %d", task_cmd, &motorPower) != 2)
-                    {
-                        G_LOGE("Invalid motor %s", outBuf);
-                    }else{
-                        if(motorPower >= 0 && motorPower <= 100){
-                            if(!motorPower){
-                                if (global::AOUT->lock(*global::AOUT, 100))
-                                {
-                                    global::AOUT->setVoltage(0);
-                                    global::AOUT->unlock();
-                                    global::OUT1->set(0);
-                                }else{
-                                    G_LOGE("Couldnt aquire motor");
-                                }
-                            }else{
-                                if (global::AOUT->lock(*global::AOUT, 100))
-                                {
-                                    global::AOUT->setVoltage(motorPower * 33);
-                                    global::AOUT->unlock();
-                                    global::OUT1->set(1);
-                                }else{
-                                    G_LOGE("Couldnt aquire motor");
-                                }
-                            }                            
-                        }
-                    }
-                    break;
-                
-                default:
-                    break;
+                    G_LOGI("NO Task Pending");
                 }
+                else
+                {
+                    G_LOGI("Got task: %s", outBuf);
 
+                    switch (task_cmd[0])
+                    {
+                    case 'L':
+                        // Lights
+                        if (sscanf(outBuf, "%s %d %d %d %d", task_cmd, &light_r, &light_g, &light_b, &light_w) != 5)
+                        {
+                            G_LOGE("Invalid Light %s", outBuf);
+                        }
+                        else
+                        {
+                            if (global::LED_RD->lock(*global::LED_RD, 100))
+                            {
+                                global::LED_RD->setVoltage(light_r * 33);
+                                global::LED_RD->unlock();
+                            }
+                            if (global::LED_GN->lock(*global::LED_GN, 100))
+                            {
+                                global::LED_GN->setVoltage(light_g * 33);
+                                global::LED_GN->unlock();
+                            }
+                            if (global::LED_BL->lock(*global::LED_BL, 100))
+                            {
+                                global::LED_BL->setVoltage(light_b * 33);
+                                global::LED_BL->unlock();
+                            }
+                            if (global::LED_WH->lock(*global::LED_WH, 100))
+                            {
+                                global::LED_WH->setVoltage(light_w * 33);
+                                global::LED_WH->unlock();
+                            }
+                        }
+                        break;
+
+                    case 'W':
+                        // Water
+                        if (sscanf(outBuf, "%s %d", task_cmd, &waterDuration) != 2)
+                        {
+                            G_LOGE("Invalid Water %s", outBuf);
+                        }
+                        else
+                        {
+                            if (waterDuration > 0 && waterDuration <= 120)
+                            {
+                                if (global::AUX2->lock(*global::AUX2, 500))
+                                {
+                                    global::AUX2->set(1);
+                                    global::AUX2->unlock();
+                                }
+                                waterTimeout.setPeriod(waterDuration, SECONDS);
+                                waterTimeout.reset();
+                            }
+                        }
+                        break;
+
+                    case 'M':
+                        // Motor
+                        if (sscanf(outBuf, "%s %d", task_cmd, &motorPower) != 2)
+                        {
+                            G_LOGE("Invalid motor %s", outBuf);
+                        }
+                        else
+                        {
+                            if (motorPower >= 0 && motorPower <= 100)
+                            {
+                                if (!motorPower)
+                                {
+                                    if (global::AOUT->lock(*global::AOUT, 100))
+                                    {
+                                        global::AOUT->setVoltage(0);
+                                        global::AOUT->unlock();
+                                        global::OUT1->set(0);
+                                    }
+                                    else
+                                    {
+                                        G_LOGE("Couldnt aquire motor");
+                                    }
+                                }
+                                else
+                                {
+                                    if (global::AOUT->lock(*global::AOUT, 100))
+                                    {
+                                        global::AOUT->setVoltage(motorPower * 33);
+                                        global::AOUT->unlock();
+                                        global::OUT1->set(1);
+                                    }
+                                    else
+                                    {
+                                        G_LOGE("Couldnt aquire motor");
+                                    }
+                                }
+                            }
+                        }
+                        break;
+
+                    default:
+                        break;
+                    }
+                }
             }
         }
 
@@ -544,13 +582,15 @@ void main_task(void *pvParameter)
             }
         }
 
-        if(!sin2){
-            vTaskDelay(500 / portTICK_RATE_MS);
-            global::OUT1->set(0);
-            vTaskDelay(500 / portTICK_RATE_MS);
-            global::OUT1->set(1);
+        if (wifiTimeout.isEllapsed())
+        {
+            wifiTimeout.reset();
+            if (adaptWiFi.getState() != G_NETWORK_CONNECTED)
+            {
+                G_LOGI("Reconnecting Wifi, no connection");
+                adaptWiFi.startConnect();
+            }
         }
-        global::IN2->unlock();
 
         vTaskDelay(100 / portTICK_RATE_MS);
         if (global::LED_STAT_ERR->lock(*global::LED_STAT_ERR, 100))
@@ -1078,8 +1118,8 @@ esp_err_t sensorUnitRequestHandler(httpd_req_t *req)
         postBuff[recv_size] = '\0';
         G_LOGI("%s\r\n", postBuff);
 
-        //only accept first message as valid
-        if(esp_timer_get_time() - lastSensorUnit > 30000000)
+        // only accept first message as valid
+        if (esp_timer_get_time() - lastSensorUnit > 30000000)
         {
             strlcpy(sensorUnitBuff, postBuff, sizeof(sensorUnitBuff));
         }
