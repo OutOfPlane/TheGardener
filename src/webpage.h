@@ -155,36 +155,6 @@ const char *webpageDataTable = R"EOF(
 <td id="wh_p">-</td>
 <td id="iwh_mA">-</td>
 </tr>
-<tr>
-<td>S-UNIT</td>
-<td id="sunit_id">-</td>
-<td id="sAge_t">-</td>
-</tr>
-<tr>
-<td>CH0</td>
-<td></td>
-<td id="sunit_ch0">-</td>
-</tr>
-<tr>
-<td>CH1</td>
-<td></td>
-<td id="sunit_ch1">-</td>
-</tr>
-<tr>
-<td>CH2</td>
-<td></td>
-<td id="sunit_ch2">-</td>
-</tr>
-<tr>
-<td>CH3</td>
-<td></td>
-<td id="sunit_ch3">-</td>
-</tr>
-<tr>
-<td>Temp</td>
-<td></td>
-<td id="sunit_temp">-</td>
-</tr>
 </table>
 )EOF";
 

@@ -47,7 +47,7 @@ int webLogHandler(const char *pattern, va_list lst)
         {
             char msg[512];
             vsprintf(msg, pattern + 9, lst);
-            if (errClient.getPrintf(msg, 511, "https://monitor.graviplant-online.de/api/v1/gp/?action=err&sn=%s&msg=%s",
+            if (errClient.getPrintf(msg, 511, "http://graviplant.visioverdis.com/api/v1/gp/?action=err&sn=%s&msg=%s",
                                     global::systemInfo.hardware.hardwareID,
                                     msg) == G_OK)
                 printf("*");
@@ -90,12 +90,12 @@ uint8_t sensor_cycle_state = 0;
 #define SENSOR_TRIGGER 1
 #define SENSOR_POWERED 2
 #define SENSOR_WAIT_MISSING 3
+uint32_t motorPower = 0;
 
 void sensor_task(void *pvParameter)
 {
     const char *_name = "sensor";
     timeout sensorUpdateTimeout(500, MILLISECONDS);
-    uint8_t motor_run = 1;
     while (1)
     {
         /* code */
@@ -108,69 +108,18 @@ void sensor_task(void *pvParameter)
                 updateSensorData();
                 sensorDataPtr.unlock();
             }
-            G_LOGI("AIN2 is %d", ain2);
-            G_LOGI("IAUX1 is %d mA", iaux1);
 
-            switch (sensor_cycle_state)
+            if (motorPower)
             {
-            case SENSOR_MISSING:
-                if (ain2 > 3100)
+                if (!sin2)
                 {
-                    G_LOGI("SENSOR TRIGGERED");
-                    sensor_cycle_state = SENSOR_TRIGGER;
-                    lastReset = esp_timer_get_time();
-                    motor_run = 0;
+                    G_LOGI("Motor not running, restarting");
+                    vTaskDelay(500 / portTICK_RATE_MS);
+                    global::OUT1->set(0);
+                    vTaskDelay(500 / portTICK_RATE_MS);
+                    global::OUT1->set(1);
+                    vTaskDelay(2000 / portTICK_RATE_MS);
                 }
-                break;
-
-            case SENSOR_TRIGGER:
-                if (esp_timer_get_time() - lastReset > 500000)
-                {
-                    G_LOGI("SENSOR POWERED");
-                    sensor_cycle_state = SENSOR_POWERED;
-                    lastReset = esp_timer_get_time();
-                    if (global::AUX1->lock(*global::AUX1, 500))
-                    {
-                        global::AUX1->set(1);
-                        global::AUX1->unlock();
-                    }
-                }
-                break;
-
-            case SENSOR_POWERED:
-                if (esp_timer_get_time() - lastReset > 10000000ul)
-                {
-                    G_LOGI("SENSOR WAIT PASSED");
-                    sensor_cycle_state = SENSOR_WAIT_MISSING;
-                    if (global::AUX1->lock(*global::AUX1, 500))
-                    {
-                        global::AUX1->set(0);
-                        global::AUX1->unlock();
-                    }
-                    motor_run = 1;
-                }
-                break;
-
-            case SENSOR_WAIT_MISSING:
-                if (ain2 < 2800)
-                {
-                    G_LOGI("SENSOR PASSED");
-                    sensor_cycle_state = SENSOR_MISSING;
-                }
-                break;
-            default:
-                break;
-            }
-
-            if (motor_run)
-            {
-                // if (!sin2)
-                // {
-                //     vTaskDelay(500 / portTICK_RATE_MS);
-                //     global::OUT1->set(0);
-                //     vTaskDelay(500 / portTICK_RATE_MS);
-                global::OUT1->set(1);
-                // }
             }
             else
             {
@@ -387,7 +336,7 @@ void main_task(void *pvParameter)
     timeout wifiTimeout(2, MINUTES);
     uint32_t aoutVolt = 0;
 
-    global::AOUT->setVoltage(28 * 33);
+    global::AOUT->setVoltage(20 * 33);
     global::OUT1->set(1);
     while (1)
     {
@@ -436,7 +385,7 @@ void main_task(void *pvParameter)
             }
             if (sensorTmp[0])
             {
-                if (myClient.postPrintf(sensorTmp, "https://monitor.graviplant-online.de/api/v1/gp/?action=add&sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
+                if (myClient.postPrintf(sensorTmp, "http://graviplant.visioverdis.com/api/v1/gp/?action=add&sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
                 {
                     G_LOGE("Telemetry post failed");
                     global::LED_STAT_RDY->set(0);
@@ -451,12 +400,12 @@ void main_task(void *pvParameter)
 
         if (requestTimeout.isEllapsed())
         {
-            int32_t motorPower = 0;
+            int32_t tmpMotor = 0;
             int32_t waterDuration = 0;
             int32_t light_r = 0, light_g = 0, light_b = 0, light_w = 0;
             requestTimeout.reset();
             outBuf[0] = 0;
-            if (myClient.getPrintf(outBuf, bufSz, "https://monitor.graviplant-online.de/api/v1/gp/?action=task&sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
+            if (myClient.getPrintf(outBuf, bufSz, "http://graviplant.visioverdis.com/api/v1/gp/?action=task&sn=%s", global::systemInfo.hardware.hardwareID) != G_OK)
             {
                 global::LED_STAT_RDY->set(0);
             }
@@ -527,26 +476,18 @@ void main_task(void *pvParameter)
 
                     case 'M':
                         // Motor
-                        if (sscanf(outBuf, "%s %d", task_cmd, &motorPower) != 2)
+                        if (sscanf(outBuf, "%s %d", task_cmd, &tmpMotor) != 2)
                         {
                             G_LOGE("Invalid motor %s", outBuf);
                         }
                         else
                         {
-                            if (motorPower >= 0 && motorPower <= 100)
+                            if (tmpMotor >= 0 && tmpMotor <= 100)
                             {
+                                motorPower = tmpMotor;
                                 if (!motorPower)
                                 {
-                                    if (global::AOUT->lock(*global::AOUT, 100))
-                                    {
-                                        global::AOUT->setVoltage(0);
-                                        global::AOUT->unlock();
-                                        global::OUT1->set(0);
-                                    }
-                                    else
-                                    {
-                                        G_LOGE("Couldnt aquire motor");
-                                    }
+                                    
                                 }
                                 else
                                 {
@@ -832,9 +773,7 @@ void updateSensorData()
 "temp_d":%d,
 "hum_r":%d,
 "fwvers":"%s",
-"fwfeat":"%s",
-"sAge_t":%d,
-"sunit":%s
+"fwfeat":"%s"
 })EOF",
             global::systemInfo.hardware.hardwareID,
             tmpSSID,
@@ -868,9 +807,7 @@ void updateSensorData()
             temper,
             humi,
             getFirmwareStringLong(),
-            __STR(G_CODE_FEATURE),
-            sensorAge_t,
-            sensorUnitBuff);
+            __STR(G_CODE_FEATURE));
 }
 
 char pageBuff[1024];
